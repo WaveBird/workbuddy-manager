@@ -78,6 +78,8 @@
 Anthropic / Responses 两条同时存「客户端说的」与「网关转出来的」：排查
 「转换层吃了哪个字段」时，缺任何一边都只能猜。
 
+![轨迹总览](images/traces.png)
+
 ## 两个视角：客户端（下游）与网关（上游）
 
 一次调用有四份报文，抓包都留：
@@ -107,6 +109,10 @@ Anthropic / Responses 两条同时存「客户端说的」与「网关转出来�
 `max_tokens`、`messages`、`stream_options`），一眼就能看出网关动过什么。
 
 Chat 协议是透传：客户端视角与网关视角相同，界面标注「透传」，不重复存一份。
+
+![客户端视角](images/traces-headers-client.png)
+
+![网关视角：顶部列出被改写的字段](images/traces-headers-gateway.png)
 
 ## 流式响应怎么读
 
