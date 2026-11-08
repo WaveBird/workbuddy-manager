@@ -61,6 +61,16 @@ const PAGE_SIZE = 20;
 /** 详情面板的四个页签。差异不是常驻请求：只在切到它时才算。 */
 type Tab = 'overview' | 'request' | 'response' | 'diff';
 
+/**
+ * 报文块的**内部滚动**类。
+ *
+ * 为什么不能让内容自然撑开：腾讯视角的响应体实测到过 130 KB / 一万多行，
+ * min(60vh,32rem) 用的是视口单位，但 60vh 在长内容时仍会把整页推到几千像素 ——
+ * 用户要滚过整块报文才能点到下面的控件（实测反馈）。固定像素上限 + `overflow-auto`
+ * 让滚动发生在块内，页面高度稳定；60vh 只对小屏起兜底作用。
+ */
+const BLOCK_SCROLL = 'max-h-96 overflow-auto';
+
 /** 稳定空数组：每次渲染现写 `[]` 会让下游依赖它的 memo 每帧重算（同日志页）。 */
 const EMPTY_TURNS: TapTurnBrief[] = [];
 
@@ -862,7 +872,7 @@ function RequestTab({turn, view, outbound, format, highlight}: {
         </h4>
         {format === 'preview'
           ? <JsonPreview value={shown} highlight={highlight} />
-          : <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2 font-mono text-[11px]">
+          : <pre className={BLOCK_SCROLL + " rounded-md bg-muted/40 p-2 font-mono text-[11px]"}>
               {pretty(shown)}
             </pre>}
       </section>
@@ -973,7 +983,7 @@ function ResponseTab({turn, view, outbound, format}: {
         <p className="text-[11px] text-muted-foreground">{note}</p>
         <section>
           <h4 className="mb-1 text-xs font-medium">{t('trace.rawStream')}</h4>
-          <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2 font-mono text-[11px]">
+          <pre className={BLOCK_SCROLL + " rounded-md bg-muted/40 p-2 font-mono text-[11px]"}>
             {raw || (structured ? pretty(structured) : '—')}
           </pre>
         </section>
@@ -1003,7 +1013,7 @@ function ResponseTab({turn, view, outbound, format}: {
           <summary className="cursor-pointer text-muted-foreground">
             {view === 'client' ? t('trace.clientRawStream') : t('trace.rawStream')}
           </summary>
-          <pre className="mt-1 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2 text-[11px]">
+          <pre className={"mt-1 " + BLOCK_SCROLL + " rounded-md bg-muted/40 p-2 text-[11px]"}>
             {raw}
           </pre>
         </details>
@@ -1219,7 +1229,7 @@ function Block({title, body}: {title: string; body: string}) {
   return (
     <section>
       <h4 className="mb-1 text-xs font-medium">{title}</h4>
-      <pre className="max-h-[min(60vh,32rem)] overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2 text-[11px]">
+      <pre className={BLOCK_SCROLL + " whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2 text-[11px]"}>
         {body}
       </pre>
     </section>
