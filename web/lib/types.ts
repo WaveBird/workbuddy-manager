@@ -1911,6 +1911,10 @@ export interface TapSession {
   client: string | null;
   /** 原始 UA。`client` 是从它派生的分类，版本号也从这里取。 */
   client_ua?: string | null;
+  /** `main` = 一轮对话；`title` 等 = 辅助调用（会话标题生成），属于某条主会话。 */
+  kind: string;
+  /** 辅助调用所属的主会话 id。 */
+  parent_id: number | null;
   /** 客户端说的协议：chat / anthropic / responses。 */
   protocol: string;
   model: string | null;

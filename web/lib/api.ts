@@ -656,6 +656,8 @@ export const tapApi = {
   prune: () => post<{turns: number; stats: TapConfigResponse['stats']}>('/api/tap/prune'),
   sessions: (params: Record<string, unknown>) =>
     get<{total: number; items: TapSession[]}>('/api/tap/sessions', params),
+  /** 触发一次历史重算：按库里已有的 UA 重新归类、并把辅助调用挂回主会话。 */
+  backfill: () => post<{changed: number; aux: number}>('/api/tap/backfill'),
   session: (id: number) => get<TapSessionDetail>(`/api/tap/sessions/${id}`),
   remove: (id: number) => del<{ok: boolean}>(`/api/tap/sessions/${id}`),
   turn: (id: number) => get<TapTurn>(`/api/tap/turns/${id}`),

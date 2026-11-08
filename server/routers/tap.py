@@ -52,7 +52,8 @@ def post_backfill(user: dict = Depends(security.require_session_admin)) -> dict:
     是谁做的。UA 原文一直在 `tap_turns` 里，重算不需要重新抓包。
     """
     changed = tap.backfill_clients()
-    return {'changed': changed, 'stats': tap.stats()}
+    aux = tap.backfill_aux()
+    return {'changed': changed, 'aux': aux, 'stats': tap.stats()}
 
 
 @router.post('/prune')
@@ -65,8 +66,10 @@ def post_prune(user: dict = Depends(security.require_session_admin)) -> dict:
 @router.get('/sessions')
 def list_sessions(page: int = 1, size: int = 20, days: int | None = None,
                   client: str | None = None, q: str | None = None,
+                  include_aux: bool = False,
                   user: dict = Depends(security.require_admin)) -> dict:
-    return tap.list_sessions(page=page, size=size, days=days, client=client, q=q)
+    return tap.list_sessions(page=page, size=size, days=days, client=client, q=q,
+                             include_aux=include_aux)
 
 
 @router.get('/sessions/{session_id}')

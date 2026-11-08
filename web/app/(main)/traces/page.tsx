@@ -79,6 +79,11 @@ export default function TracesPage() {
   const [client, setClient] = useState('all');
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState('');
+  /**
+   * 是否显示辅助调用（会话标题生成这类）。默认不显示：它们属于某条主会话，
+   * 单列出来会让人以为「一次对话被记了两条」——实测反馈。
+   */
+  const [showAux, setShowAux] = useState(false);
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [turnId, setTurnId] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
@@ -101,10 +106,11 @@ export default function TracesPage() {
       cfg: () => tapApi.config(),
       sessions: () => tapApi.sessions({
         page, size: PAGE_SIZE, days, client, q: settledQuery || undefined,
+        include_aux: showAux ? 1 : undefined,
       }),
     },
     [],
-    [page, client, settledQuery, days],
+    [page, client, settledQuery, days, showAux],
   );
 
   const cfg = list.values.cfg;
@@ -331,6 +337,12 @@ export default function TracesPage() {
                 placeholder={t('trace.search')}
                 className="h-8 text-xs"
               />
+              {/* 辅助调用（标题生成等）默认折叠：它们是同一次对话的一部分 */}
+              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Switch checked={showAux} onCheckedChange={setShowAux}
+                        aria-label={t('trace.showAux')} />
+                {t('trace.showAux')}
+              </label>
             </div>
 
             <div className="min-h-0 flex-1 space-y-1.5 overflow-auto">
@@ -359,9 +371,16 @@ export default function TracesPage() {
                     <span className="truncate text-xs font-medium">
                       {sessionTitle(s)}
                     </span>
-                    <Badge variant="outline" className="shrink-0 text-[10px]">
-                      {clientLabel(s.client)}
-                    </Badge>
+                    <span className="flex shrink-0 items-center gap-1">
+                      {s.kind !== 'main' && (
+                        <Badge className="bg-amber-500/15 text-[10px] text-amber-700">
+                          {t('trace.auxBadge')}
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className="text-[10px]">
+                        {clientLabel(s.client)}
+                      </Badge>
+                    </span>
                   </div>
                   <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
                     <span>{fmtDateTime(s.updated_at)}</span>
@@ -412,6 +431,22 @@ export default function TracesPage() {
                     <p className="truncate text-sm font-medium">
                       {sessionTitle(session)}
                     </p>
+                    {session.kind !== 'main' && (
+                      <p className="mt-1 text-[11px] text-amber-600">
+                        {session.parent_id
+                          ? t('trace.auxOf', {id: session.parent_id})
+                          : t('trace.auxUnlinked')}
+                        {session.parent_id ? (
+                          <button
+                            type="button"
+                            className="ml-1 underline"
+                            onClick={() => { setSessionId(session.parent_id); setTurnId(null); }}
+                          >
+                            {t('trace.auxJump')}
+                          </button>
+                        ) : null}
+                      </p>
+                    )}
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
                       {t('trace.sessionMeta', {
                         client: clientLabel(session.client)

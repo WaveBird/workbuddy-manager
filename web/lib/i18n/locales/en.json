@@ -2293,6 +2293,11 @@
     "headers": "Headers (client)",
     "upstreamHeaders": "Headers (gateway → upstream)",
     "headersHint": "Credentials are masked, keeping the first 6 characters so you can still tell which key it was",
-    "noHeaders": "No headers captured — this record predates the feature"
+    "noHeaders": "No headers captured — this record predates the feature",
+    "auxBadge": "aux",
+    "showAux": "Show auxiliary calls",
+    "auxOf": "Auxiliary call (session title generation), belongs to session #{id}",
+    "auxUnlinked": "Auxiliary call (session title generation); no parent session matched",
+    "auxJump": "Open that session"
   }
 }
