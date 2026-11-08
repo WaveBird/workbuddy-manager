@@ -1019,8 +1019,13 @@ def list_sessions(page: int = 1, size: int = 20, days: int | None = None,
     clause = ('WHERE ' + ' AND '.join(where)) if where else ''
     total = int(db.query_one(
         f'SELECT COUNT(*) AS c FROM tap_sessions s {clause}', args)['c'] or 0)
+    # `turns` 一律从 tap_turns **实算**，不用会话表里的汇总列。
+    # 教训（2026-11-08）：库损坏后恢复出的汇总列还在、明细行全丢，列表于是显示
+    # 「33 轮」而每一轮都点不开 —— 界面上看起来像功能坏了，其实是数字在撒谎。
     rows = db.query(
-        f'SELECT s.*, k.name AS key_name FROM tap_sessions s '
+        f'SELECT s.*, k.name AS key_name, '
+        f'(SELECT COUNT(*) FROM tap_turns t WHERE t.session_id = s.id) AS actual_turns '
+        f'FROM tap_sessions s '
         f'LEFT JOIN api_keys k ON k.id = s.key_id {clause} '
         f'ORDER BY s.updated_at DESC LIMIT ? OFFSET ?',
         (*args, size, (page - 1) * size),
@@ -1041,7 +1046,7 @@ def list_sessions(page: int = 1, size: int = 20, days: int | None = None,
                 'model': r['model'],
                 'started_at': r['started_at'],
                 'updated_at': r['updated_at'],
-                'turns': r['turns'],
+                'turns': r['actual_turns'],
                 'prompt_tokens': r['prompt_tokens'],
                 'completion_tokens': r['completion_tokens'],
             }
@@ -1077,7 +1082,7 @@ def session(session_id: int) -> dict | None:
         'model': row['model'],
         'started_at': row['started_at'],
         'updated_at': row['updated_at'],
-        'turns': row['turns'],
+        'turns': len(turns),
         'prompt_tokens': row['prompt_tokens'],
         'completion_tokens': row['completion_tokens'],
         'items': [

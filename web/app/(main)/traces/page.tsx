@@ -96,6 +96,8 @@ export default function TracesPage() {
    */
   const [view, setView] = useState<'client' | 'gateway'>('client');
   const [turn, setTurn] = useState<TapTurn | null>(null);
+  /** 单轮正文取不到（404 / 网络错误）：要明确说，而不是让骨架屏一直转。 */
+  const [turnFailed, setTurnFailed] = useState(false);
   const [diff, setDiff] = useState<TapDiff | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -156,12 +158,15 @@ export default function TracesPage() {
     }
     let alive = true;
     setTurn(null);
+    setTurnFailed(false);
     tapApi.turn(turnId)
       .then((data) => {
         if (alive) setTurn(data);
       })
       .catch((e) => {
-        if (alive) notify.err(errText(e));
+        if (!alive) return;
+        setTurnFailed(true);
+        notify.err(errText(e));
       });
     return () => {
       alive = false;
@@ -577,8 +582,20 @@ export default function TracesPage() {
                   </div>
                 </div>
 
+                {items.length === 0 ? (
+                  // 会话在、明细没了（典型来源：数据库损坏后只恢复出汇总）。
+                  // 必须说清楚 —— 早先这里只是一直转骨架屏，看起来像功能坏了。
+                  <EmptyState
+                    icon={Radar}
+                    title={t('trace.noTurnsTitle')}
+                    description={t('trace.noTurnsDesc')}
+                  />
+                ) : (
                 <div className="min-h-0 flex-1 overflow-auto">
-                  {!turn && <SkeletonBar className="h-40 w-full" />}
+                  {!turn && !turnFailed && <SkeletonBar className="h-40 w-full" />}
+                  {!turn && turnFailed && (
+                    <p className="text-xs text-muted-foreground">{t('trace.turnLoadFailed')}</p>
+                  )}
                   {turn && tab === 'overview' && <Overview turn={turn} />}
                   {turn && tab === 'request' && <RequestTab turn={turn} view={view} />}
                   {turn && tab === 'response' && <ResponseTab turn={turn} view={view} />}
@@ -586,6 +603,7 @@ export default function TracesPage() {
                     <DiffTab diff={diff} hasPrev={Boolean(before)} />
                   )}
                 </div>
+                )}
               </>
             )}
           </div>
