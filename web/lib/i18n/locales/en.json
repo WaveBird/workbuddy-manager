@@ -2308,6 +2308,14 @@
     "hasAux": "+{n} aux",
     "auxInline": "{n} auxiliary calls:",
     "kindTitle": "title",
-    "kindCompact": "compact"
+    "kindCompact": "compact",
+    "formatLabel": "Format",
+    "format": {
+      "preview": "Preview",
+      "raw": "Raw"
+    },
+    "diffBefore": "Before",
+    "diffAfter": "After",
+    "locate": "Locate"
   }
 }

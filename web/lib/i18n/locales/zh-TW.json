@@ -2281,6 +2281,14 @@
     "hasAux": "+{n} 輔助",
     "auxInline": "含 {n} 次輔助呼叫：",
     "kindTitle": "標題",
-    "kindCompact": "壓縮"
+    "kindCompact": "壓縮",
+    "formatLabel": "格式",
+    "format": {
+      "preview": "Preview",
+      "raw": "Raw"
+    },
+    "diffBefore": "改前",
+    "diffAfter": "改後",
+    "locate": "定位"
   }
 }

@@ -2048,6 +2048,14 @@
     "hasAux": "+{n} 辅助",
     "auxInline": "含 {n} 次辅助调用：",
     "kindTitle": "标题",
-    "kindCompact": "压缩"
+    "kindCompact": "压缩",
+    "formatLabel": "格式",
+    "format": {
+      "preview": "Preview",
+      "raw": "Raw"
+    },
+    "diffBefore": "改前",
+    "diffAfter": "改后",
+    "locate": "定位"
   }
 }

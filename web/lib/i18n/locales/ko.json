@@ -2281,6 +2281,14 @@
     "hasAux": "+{n} 보조",
     "auxInline": "보조 호출 {n}건:",
     "kindTitle": "제목",
-    "kindCompact": "압축"
+    "kindCompact": "압축",
+    "formatLabel": "형식",
+    "format": {
+      "preview": "미리보기",
+      "raw": "원본"
+    },
+    "diffBefore": "변경 전",
+    "diffAfter": "변경 후",
+    "locate": "위치로"
   }
 }

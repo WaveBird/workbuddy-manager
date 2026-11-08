@@ -2281,6 +2281,14 @@
     "hasAux": "+{n} 補助",
     "auxInline": "補助呼び出し {n} 件：",
     "kindTitle": "タイトル",
-    "kindCompact": "圧縮"
+    "kindCompact": "圧縮",
+    "formatLabel": "表示",
+    "format": {
+      "preview": "プレビュー",
+      "raw": "生データ"
+    },
+    "diffBefore": "変更前",
+    "diffAfter": "変更後",
+    "locate": "位置へ"
   }
 }
