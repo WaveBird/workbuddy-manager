@@ -2245,6 +2245,22 @@
     "filterDays": "기간",
     "filterClient": "클라이언트",
     "timeline": "타임라인 · {n}턴",
-    "copyArgs": "인수 복사"
+    "copyArgs": "인수 복사",
+    "viewLabel": "관점",
+    "view": {
+      "client": "클라이언트",
+      "gateway": "게이트웨이"
+    },
+    "clientRequest": "클라이언트 요청 본문(원본)",
+    "clientRequestHint": "게이트웨이가 손대기 전, 클라이언트가 보낸 그대로의 내용",
+    "upstreamRequest": "업스트림으로 보낸 요청 본문",
+    "gatewayRequestHint": "게이트웨이가 변환해 실제로 보낸 내용: 모델 매핑, 파라미터 제한, 이미지 정규화, stream_options가 여기서 일어납니다",
+    "rewrites": "게이트웨이 변환",
+    "noRewrite": "변환 없음: 클라이언트가 보낸 내용과 동일합니다",
+    "passthroughNote": "통과: 클라이언트는 업스트림 응답을 그대로 받았습니다",
+    "translatedNote": "번역됨: 클라이언트가 실제로 받은 내용입니다(업스트림 형태는 \"게이트웨이\" 관점)",
+    "upstreamNote": "업스트림 원문: 게이트웨이와 업스트림 사이의 통신(SSE 프레임 또는 JSON)",
+    "clientRawStream": "클라이언트가 받은 원본 스트림",
+    "notCaptured": "수집되지 않음: 이 기록은 클라이언트 관점이 생기기 전에 저장되었습니다"
   }
 }

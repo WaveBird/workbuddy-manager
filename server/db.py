@@ -499,6 +499,10 @@ CREATE TABLE IF NOT EXISTS tap_turns (
   request_json      TEXT,
   -- 上游原始响应：流式是 SSE 原文，非流式是 JSON 文本，同样脱敏并截断。
   response_text     TEXT,
+  -- **回给客户端的**响应。chat 是透传（与 response_text 相同），Anthropic /
+  -- Responses 两条协议是**翻译后**的形态 —— 同一个请求，「上游说了什么」与
+  -- 「客户端收到了什么」是两份不同的报文，排查协议转换只能两边对着看。
+  client_response_text TEXT,
   -- 从上面那段响应里重建出的「模型到底说了什么」：正文、思考、工具调用。
   -- 流式响应没法直接读；不重建，用户在界面上只能看到一堆 `data:` 行。
   recon_json        TEXT,
@@ -714,6 +718,9 @@ def replace_database(staging: Path) -> None:
 # 因此新增字段必须显式 ALTER。每条用 PRAGMA 检测后再加，可重复执行。
 _MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     # (表名, 列名, 列定义)
+    # 抓包要能对着看「上游说的」与「客户端收到的」：存量库缺这一列时，
+    # 界面按「未采集」处理，而不是把上游原文冒充成客户端视角。
+    ('tap_turns', 'client_response_text', 'TEXT'),
     ('request_logs', 'credit', 'REAL'),
     ('usage_daily', 'credit', 'REAL NOT NULL DEFAULT 0'),
     # 首字延迟：可空（历史记录与非流式请求为 NULL）

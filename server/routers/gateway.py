@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import os
 import re
@@ -1294,6 +1295,11 @@ async def _chat(request: Request, upstream_path: str):
     body, err = await _read_json_body(request)
     if err:
         return err
+    # 客户端原样发出的那份请求体：**在任何改写之前**深拷贝。
+    # 后面的模型映射、max_tokens 钳制、图片归一、stream_options 注入都会就地
+    # 改动 `body`，改完就再也拿不到「客户端到底发了什么」——而抓包页的
+    # 「客户端视角」正是要看这一份，和网关改写后的那份对着看。
+    client_body = copy.deepcopy(body)
 
     requested_model = body.get('model') if isinstance(body, dict) else None
     # model 必须是字符串：非字符串（对象/数组/数字）会让后面的 _map_model 与
@@ -1370,7 +1376,7 @@ async def _chat(request: Request, upstream_path: str):
             # 抓包（Trace Tap）：在记账之后、响应返回之前落库。放在这里而不是
             # 转发之前，是因为非流式要拿到完整响应体才算「这一轮到底回了什么」。
             tap_svc.capture(
-                body=body, headers=request.headers.items(), key=key, ua=ua,
+                body=client_body, headers=request.headers.items(), key=key, ua=ua,
                 path=upstream_path, protocol='chat', status=rec_status,
                 latency_ms=latency, stream=False, payload=data, usage=usage,
                 error=error, upstream_body=body,
@@ -1390,7 +1396,7 @@ async def _chat(request: Request, upstream_path: str):
             _record(key, ip, requested_model or '', mapped or '', 502, 0, 0, latency, ua, str(exc), False,
                     account_expected=_account_expected_after_error(exc))
             tap_svc.capture(
-                body=body, headers=request.headers.items(), key=key, ua=ua,
+                body=client_body, headers=request.headers.items(), key=key, ua=ua,
                 path=upstream_path, protocol='chat', status=502, latency_ms=latency,
                 stream=False, error=str(exc), upstream_body=body,
             )
@@ -1479,7 +1485,7 @@ async def _chat(request: Request, upstream_path: str):
                 first_token=first_token_ms, effort=effort,
             )
             tap_svc.capture(
-                body=body, headers=request.headers.items(), key=key, ua=ua,
+                body=client_body, headers=request.headers.items(), key=key, ua=ua,
                 path=upstream_path, protocol='chat', status=status_code,
                 latency_ms=latency, first_token_ms=first_token_ms, stream=True,
                 text=raw_stream.text(), usage=usage, error=error_text,

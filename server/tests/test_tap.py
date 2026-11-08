@@ -127,6 +127,91 @@ class PureTest(unittest.TestCase):
         self.assertEqual(out['summary']['added'], 1)
         self.assertEqual([p['key'] for p in out['params']], ['temperature'])
 
+    def test_client_reconstruct_reads_anthropic_stream(self) -> None:
+        """Anthropic 客户端收到的是**翻译后**的事件流，字段名与上游完全不同。"""
+        sse = '\n'.join([
+            'event: message_start',
+            'data: ' + json.dumps({'type': 'message_start',
+                                   'message': {'id': 'msg_1', 'content': []}}),
+            'event: content_block_start',
+            'data: ' + json.dumps({'type': 'content_block_start', 'index': 0,
+                                   'content_block': {'type': 'text', 'text': ''}}),
+            'event: content_block_delta',
+            'data: ' + json.dumps({'type': 'content_block_delta', 'index': 0,
+                                   'delta': {'type': 'text_delta', 'text': '你好'}}),
+            'event: content_block_start',
+            'data: ' + json.dumps({'type': 'content_block_start', 'index': 1,
+                                   'content_block': {'type': 'tool_use', 'id': 'tu_1',
+                                                    'name': 'read_file', 'input': {}}}),
+            'event: content_block_delta',
+            'data: ' + json.dumps({'type': 'content_block_delta', 'index': 1,
+                                   'delta': {'type': 'input_json_delta',
+                                             'partial_json': '{"path":'}}),
+            'event: content_block_delta',
+            'data: ' + json.dumps({'type': 'content_block_delta', 'index': 1,
+                                   'delta': {'type': 'input_json_delta',
+                                             'partial_json': '"a.py"}'}}),
+            'event: message_delta',
+            'data: ' + json.dumps({'type': 'message_delta',
+                                   'delta': {'stop_reason': 'tool_use'}}),
+            'event: message_stop',
+            'data: ' + json.dumps({'type': 'message_stop'}),
+        ])
+        out = tap.client_reconstruct(sse, 'anthropic')
+        assert out is not None
+        self.assertEqual(out['text'], '你好')
+        self.assertEqual(out['finish'], 'tool_use')
+        self.assertTrue(out['done'])
+        self.assertEqual(len(out['tool_calls']), 1)
+        self.assertEqual(out['tool_calls'][0]['name'], 'read_file')
+        self.assertEqual(json.loads(out['tool_calls'][0]['arguments']), {'path': 'a.py'})
+
+    def test_client_reconstruct_reads_responses_stream(self) -> None:
+        sse = '\n'.join([
+            'event: response.output_item.added',
+            'data: ' + json.dumps({'type': 'response.output_item.added',
+                                   'output_index': 0,
+                                   'item': {'type': 'function_call', 'call_id': 'c1',
+                                            'name': 'run_tests', 'arguments': ''}}),
+            'event: response.function_call_arguments.delta',
+            'data: ' + json.dumps({'type': 'response.function_call_arguments.delta',
+                                   'output_index': 0, 'delta': '{"target":'}),
+            'event: response.output_text.delta',
+            'data: ' + json.dumps({'type': 'response.output_text.delta',
+                                   'delta': 'done'}),
+            'event: response.completed',
+            'data: ' + json.dumps({'type': 'response.completed',
+                                   'response': {'status': 'completed'}}),
+        ])
+        out = tap.client_reconstruct(sse, 'responses')
+        assert out is not None
+        self.assertEqual(out['text'], 'done')
+        self.assertEqual(out['tool_calls'][0]['arguments'], '{"target":')
+        self.assertTrue(out['done'])
+
+    def test_client_reconstruct_reads_non_stream_objects(self) -> None:
+        anthropic = json.dumps({'content': [
+            {'type': 'text', 'text': 'hi'},
+            {'type': 'tool_use', 'id': 'tu', 'name': 'read_file', 'input': {'path': 'a'}},
+        ], 'stop_reason': 'tool_use'})
+        out = tap.client_reconstruct(anthropic, 'anthropic')
+        assert out is not None
+        self.assertEqual(out['text'], 'hi')
+        self.assertEqual(out['tool_calls'][0]['name'], 'read_file')
+
+        responses = json.dumps({'status': 'completed', 'output': [
+            {'type': 'message', 'content': [{'type': 'output_text', 'text': 'ok'}]},
+            {'type': 'function_call', 'call_id': 'c', 'name': 'ls', 'arguments': '{}'},
+        ]})
+        out2 = tap.client_reconstruct(responses, 'responses')
+        assert out2 is not None
+        self.assertEqual(out2['text'], 'ok')
+        self.assertEqual(out2['tool_calls'][0]['arguments'], '{}')
+
+    def test_client_reconstruct_tolerates_empty(self) -> None:
+        self.assertIsNone(tap.client_reconstruct(None, 'anthropic'))
+        self.assertIsNone(tap.client_reconstruct('', 'responses'))
+
     def test_client_family(self) -> None:
         self.assertEqual(tap._client_family('claude-code/1.0'), 'claude')
         self.assertEqual(tap._client_family('codex_cli_rs/0.9'), 'codex')
@@ -249,6 +334,50 @@ class DbTest(unittest.TestCase):
         row = db.query_one('SELECT request_json FROM tap_turns WHERE id = ?', (turn_id,))
         assert row is not None
         self.assertNotIn('sk-live1234567890', row['request_json'])
+
+    def test_capture_keeps_both_sides_of_the_request(self) -> None:
+        """客户端原样的体与网关改写后的体必须分开存。
+
+        这一条守的是最容易被写坏的地方：`body` 在网关里是**就地改写**的（模型
+        映射、max_tokens 钳制、图片归一、stream_options 注入）。如果调用方忘了
+        在改写前快照，抓包页的「客户端视角」就会显示成网关改写后的样子 ——
+        界面上看起来一切正常，只是那份证据永远拿不回来了。
+        """
+        tap.save_settings({'enabled': True})
+        original = _body(model='gpt-4o', temperature=0.2)
+        processed = _body(model='cn:gpt-4o', temperature=0.2,
+                          stream_options={'include_usage': True})
+        turn_id = self._capture(body=original, upstream_body=processed, stream=False)
+        assert turn_id is not None
+        view = tap.turn_view(turn_id)
+        assert view is not None
+        req = view['request']
+        self.assertEqual(req['body']['model'], 'gpt-4o', '客户端视角必须是原样')
+        self.assertEqual(req['upstream_body']['model'], 'cn:gpt-4o', '网关视角必须是改写后')
+
+    def test_capture_stores_client_response_for_translators(self) -> None:
+        """Anthropic / Responses 的「客户端视角」是翻译后的报文，不能等同上游原文。"""
+        tap.save_settings({'enabled': True})
+        client_doc = {'content': [{'type': 'text', 'text': '你好'}],
+                      'stop_reason': 'end_turn'}
+        turn_id = self._capture(protocol='anthropic', stream=False,
+                                payload={'choices': [{'message': {'content': '你好'}}]},
+                                client_response=client_doc)
+        assert turn_id is not None
+        view = tap.turn_view(turn_id)
+        assert view is not None
+        self.assertFalse(view['passthrough'])
+        self.assertEqual(view['client_response']['content'][0]['text'], '你好')
+        self.assertEqual(view['client_recon']['text'], '你好')
+
+    def test_chat_is_marked_passthrough(self) -> None:
+        """Chat 是透传：不重复存一份，界面上标注「与上游一致」。"""
+        tap.save_settings({'enabled': True})
+        turn_id = self._capture()  # 默认 protocol='chat'，未传 client_response
+        view = tap.turn_view(turn_id)
+        assert view is not None
+        self.assertTrue(view['passthrough'])
+        self.assertEqual(view['client_response'], view['response'])
 
     def test_prune_respects_max_sessions(self) -> None:
         tap.save_settings({'enabled': True, 'max_sessions': 10})

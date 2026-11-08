@@ -2012,6 +2012,22 @@
     "filterDays": "时间范围",
     "filterClient": "客户端",
     "timeline": "时间概览 · {n} 轮",
-    "copyArgs": "复制参数"
+    "copyArgs": "复制参数",
+    "viewLabel": "视角",
+    "view": {
+      "client": "客户端",
+      "gateway": "网关"
+    },
+    "clientRequest": "客户端请求体（原样）",
+    "clientRequestHint": "客户端（下游）原样发出的请求 —— 网关还没碰它",
+    "upstreamRequest": "网关发往上游的请求体",
+    "gatewayRequestHint": "网关改写后真正发往上游的请求：模型映射 / 参数钳制 / 图片归一 / stream_options 都在这一步发生",
+    "rewrites": "网关改写",
+    "noRewrite": "网关未改写：与客户端发出的完全一致",
+    "passthroughNote": "透传：客户端收到的响应与上游返回一致",
+    "translatedNote": "翻译后：这是客户端实际收到的报文（上游形态见「网关」视角）",
+    "upstreamNote": "上游原文：网关与上游之间那一跳（SSE 帧或 JSON）",
+    "clientRawStream": "客户端收到的原始流",
+    "notCaptured": "未采集：该记录写入时还没有客户端视角"
   }
 }

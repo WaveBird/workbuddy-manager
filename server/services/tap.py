@@ -418,6 +418,147 @@ def reconstruct(text: str | None = None, payload: object | None = None) -> dict:
     return out
 
 
+def client_reconstruct(client_text: str | None, protocol: str) -> dict | None:
+    """从**客户端视角**的响应里还原「模型说了什么」。
+
+    为什么不能直接复用 `reconstruct`：那个函数读的是**上游**的 OpenAI 形态。
+    Anthropic / Responses 两条协议回给客户端的是翻译后的报文 —— 事件名、字段名、
+    工具参数所在位置全不一样。两边各解析一次，用户才能在「客户端视角」里看到
+    自己真正收到的东西，而不是网关看到的原始形态。
+
+    非流式（JSON）与流式（SSE）两种都认：先按 JSON 试，失败再按 SSE 逐帧读。
+    """
+    if not client_text:
+        return None
+    out: dict[str, Any] = {
+        'text': '', 'reasoning': '', 'tool_calls': [], 'finish': None,
+        'events': 0, 'done': False,
+    }
+
+    # 非流式：整份 JSON 报文
+    try:
+        doc = json.loads(client_text)
+    except ValueError:
+        doc = None
+    if isinstance(doc, dict):
+        if protocol == 'anthropic':
+            for block in doc.get('content') or []:
+                if not isinstance(block, dict):
+                    continue
+                kind = block.get('type')
+                if kind == 'text' and isinstance(block.get('text'), str):
+                    out['text'] += block['text']
+                elif kind == 'thinking' and isinstance(block.get('thinking'), str):
+                    out['reasoning'] += block['thinking']
+                elif kind == 'tool_use':
+                    out['tool_calls'].append({
+                        'id': str(block.get('id') or ''),
+                        'name': str(block.get('name') or ''),
+                        'arguments': json.dumps(block.get('input') or {},
+                                                ensure_ascii=False),
+                    })
+            out['finish'] = doc.get('stop_reason')
+            out['done'] = True
+            out['events'] = 1
+            return out
+        if protocol == 'responses':
+            for item in doc.get('output') or []:
+                if not isinstance(item, dict):
+                    continue
+                if item.get('type') == 'message':
+                    for part in item.get('content') or []:
+                        if isinstance(part, dict) and isinstance(part.get('text'), str):
+                            out['text'] += part['text']
+                elif item.get('type') == 'function_call':
+                    out['tool_calls'].append({
+                        'id': str(item.get('call_id') or ''),
+                        'name': str(item.get('name') or ''),
+                        'arguments': str(item.get('arguments') or ''),
+                    })
+                elif item.get('type') == 'reasoning':
+                    for part in item.get('summary') or []:
+                        if isinstance(part, dict) and isinstance(part.get('text'), str):
+                            out['reasoning'] += part['text']
+            out['finish'] = doc.get('status')
+            out['done'] = True
+            out['events'] = 1
+            return out
+        # chat 非流式：与上游同形
+        return reconstruct(payload=doc)
+
+    # 流式：逐帧读（两种协议的帧名不同，但都是 `data: {json}`）
+    calls: dict[int, dict] = {}
+    for line in client_text.splitlines():
+        line = line.strip()
+        if not line.startswith('data:'):
+            continue
+        raw = line[5:].strip()
+        if not raw or raw == '[DONE]':
+            continue
+        try:
+            obj = json.loads(raw)
+        except ValueError:
+            continue
+        if not isinstance(obj, dict):
+            continue
+        out['events'] += 1
+        etype = obj.get('type')
+        if protocol == 'anthropic':
+            if etype == 'content_block_start':
+                block = obj.get('content_block') or {}
+                if isinstance(block, dict) and block.get('type') == 'tool_use':
+                    idx = int(obj.get('index') or 0)
+                    calls[idx] = {'id': str(block.get('id') or ''),
+                                  'name': str(block.get('name') or ''),
+                                  'arguments': ''}
+            elif etype == 'content_block_delta':
+                delta = obj.get('delta') or {}
+                if isinstance(delta, dict):
+                    if isinstance(delta.get('text'), str):
+                        out['text'] += delta['text']
+                    if isinstance(delta.get('thinking'), str):
+                        out['reasoning'] += delta['thinking']
+                    if isinstance(delta.get('partial_json'), str):
+                        idx = int(obj.get('index') or 0)
+                        slot = calls.setdefault(idx, {'id': '', 'name': '', 'arguments': ''})
+                        slot['arguments'] += delta['partial_json']
+            elif etype == 'message_delta':
+                delta = obj.get('delta') or {}
+                if isinstance(delta, dict) and delta.get('stop_reason'):
+                    out['finish'] = delta['stop_reason']
+            elif etype == 'message_stop':
+                out['done'] = True
+        elif protocol == 'responses':
+            if etype == 'response.output_text.delta' and isinstance(obj.get('delta'), str):
+                out['text'] += obj['delta']
+            elif etype == 'response.reasoning_text.delta' and isinstance(obj.get('delta'), str):
+                out['reasoning'] += obj['delta']
+            elif etype == 'response.output_item.added':
+                item = obj.get('item') or {}
+                if isinstance(item, dict) and item.get('type') == 'function_call':
+                    idx = int(obj.get('output_index') or 0)
+                    calls[idx] = {'id': str(item.get('call_id') or ''),
+                                  'name': str(item.get('name') or ''),
+                                  'arguments': ''}
+            elif etype == 'response.function_call_arguments.delta':
+                idx = int(obj.get('output_index') or 0)
+                slot = calls.setdefault(idx, {'id': '', 'name': '', 'arguments': ''})
+                if isinstance(obj.get('delta'), str):
+                    slot['arguments'] += obj['delta']
+            elif etype in ('response.completed', 'response.failed', 'response.incomplete'):
+                out['done'] = True
+                resp = obj.get('response') or {}
+                if isinstance(resp, dict) and resp.get('status'):
+                    out['finish'] = resp['status']
+        else:
+            # 兜底：按 OpenAI 帧读（chat 透传时走不到这里）
+            sub = reconstruct(text='data: ' + raw)
+            out['text'] += sub['text']
+            out['reasoning'] += sub['reasoning']
+    out['tool_calls'] = [calls[k] for k in sorted(calls)]
+    return out
+
+
 # ── 写入 ─────────────────────────────────────────────────
 def _session_id(fingerprint: str, key_id: int | None, client: str,
                 protocol: str, model: str | None, now: int) -> int:
@@ -457,13 +598,19 @@ def capture(*, body: object, headers: Iterable[tuple[str, str]] | None,
             first_token_ms: int | None = None, stream: bool = False,
             text: str | None = None, payload: object | None = None,
             usage: dict | None = None, error: str | None = None,
-            upstream_body: object | None = None) -> int | None:
+            upstream_body: object | None = None,
+            client_response: object | None = None) -> int | None:
     """记录一轮调用。返回 turn id，未抓包时返回 None。
 
-    `body` 是客户端发来的请求体（按 protocol 解读用于指纹），`upstream_body`
-    是实际发给上游的 OpenAI 形态（有转换时传，用于展示「真正发出去的是什么」）。
-    两者都存：请求体是**客户端的意图**，上游体是**网关改写后的结果**，排查
-    「模型映射/参数钳制是否生效」时缺一不可。
+    **两端都存**，因为「客户端发的」与「网关发出去的」本来就是两份报文：
+
+    * `body` —— 客户端**原样**发来的请求体（调用方必须在改写**之前**深拷贝一份）；
+    * `upstream_body` —— 网关改写后真正发往上游的形态（模型映射、`max_tokens`
+      钳制、图片归一、`stream_options` 注入都发生在这条路径上）。
+
+    响应同理：`text` / `payload` 是**上游**原文，`client_response` 是**回给
+    客户端**的报文（Chat 是透传；Anthropic / Responses 是翻译后的形态）。少了
+    任何一边，排查「转换层吃了什么字段」都只能靠猜。
 
     调用方必须保证异常不外溢：本函数自己兜底，但抓包在请求收尾路径上，
     多一层保险不值得计较。
@@ -490,6 +637,8 @@ def capture(*, body: object, headers: Iterable[tuple[str, str]] | None,
 
         request_doc = {
             'headers': redact_headers(headers),
+            # `body` 是**客户端原样**发出的体（调用方在改写前快照）；
+            # `upstream_body` 是网关改写后的体。相同时只在上面存一份。
             'body': body,
         }
         if upstream_body is not None and upstream_body is not body:
@@ -505,6 +654,16 @@ def capture(*, body: object, headers: Iterable[tuple[str, str]] | None,
             response_text, cut_response = _clip(
                 scrub(json.dumps(payload, ensure_ascii=False, default=str)),
                 cfg['max_body'])
+
+        # 客户端视角：只有翻译层（Anthropic / Responses）才与上游不同。Chat 是
+        # 透传，**不重复存一份** —— 界面按「透传」直接复用上游原文，省一半空间。
+        client_text = ''
+        if client_response is not None:
+            raw_client = (client_response if isinstance(client_response, str)
+                          else json.dumps(client_response, ensure_ascii=False,
+                                          default=str))
+            client_text, cut_client = _clip(scrub(raw_client), cfg['max_body'])
+            cut_response = cut_response or cut_client
 
         recon_text, cut_recon = _clip(
             json.dumps(recon, ensure_ascii=False, default=str), cfg['max_body'])
@@ -523,13 +682,12 @@ def capture(*, body: object, headers: Iterable[tuple[str, str]] | None,
             'INSERT INTO tap_turns(session_id, seq, ts, path, protocol, model, '
             'mapped_model, status, stream, latency_ms, first_token_ms, '
             'prompt_tokens, completion_tokens, cache_hit_tokens, cache_miss_tokens, '
-            'cost, request_json, response_text, recon_json, usage_json, error, '
-            'truncated) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '
-            '?, ?, ?, ?, ?)',
+            'cost, request_json, response_text, client_response_text, recon_json, '
+            'usage_json, error, truncated) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (session_id, seq, now, _clean(path, 128), protocol, _clean(model, 128),
              _clean(model, 128), status, 1 if stream else 0, latency_ms,
              first_token_ms, pt, ct, _as_int(hit), _as_int(miss), cost,
-             request_text, response_text, recon_text,
+             request_text, response_text, client_text or None, recon_text,
              json.dumps(usage_obj, ensure_ascii=False, default=str)[:8192],
              _clean(error, 500), 1 if (cut_request or cut_response or cut_recon) else 0),
         )
@@ -714,6 +872,18 @@ def turn(turn_id: int) -> dict | None:
     recon, _ = _loads(row['recon_json'])
     usage, _ = _loads(row['usage_json'])
     response, response_ok = _loads(row['response_text'])
+    # 客户端视角的响应：Chat 是透传（直接复用上游原文），翻译层才有独立报文。
+    # 存量行没有这一列（NULL）—— 界面按「未采集」显示，不拿上游原文冒充。
+    protocol = str(row['protocol'] or 'chat')
+    client_text = row['client_response_text'] if 'client_response_text' in row.keys() else None
+    if client_text:
+        client_doc, client_ok = _loads(client_text)
+        client_recon = client_reconstruct(client_text, protocol)
+    elif protocol == 'chat':
+        client_doc, client_ok = response, response_ok
+        client_recon = recon
+    else:
+        client_doc, client_ok, client_recon = None, False, None
     return {
         'id': row['id'],
         'session_id': row['session_id'],
@@ -742,6 +912,19 @@ def turn(turn_id: int) -> dict | None:
         'response_raw': row['response_text'] if (not response_ok or row['stream']) else None,
         'recon': recon or {'text': '', 'reasoning': '', 'tool_calls': []},
         'usage': usage or {},
+        # ── 两端视角 ──────────────────────────────────────────
+        # `upstream_*` 是网关与上游之间那一跳，`client_*` 是客户端手里那份。
+        # 对 Chat 两者相同（透传），对 Anthropic / Responses 是两份不同报文。
+        'upstream_response': response,
+        'upstream_response_ok': response_ok,
+        'upstream_recon': recon or {'text': '', 'reasoning': '', 'tool_calls': []},
+        'client_response': client_doc,
+        'client_response_ok': client_ok,
+        'client_response_raw': client_text if (client_text and not client_ok) else None,
+        'client_recon': client_recon,
+        'passthrough': protocol == 'chat' or not client_text,
+        # 按协议解读：客户端视角的那份报文用哪种协议解析（chat 透传时同上）
+        'client_protocol': 'chat' if protocol == 'chat' else protocol,
     }
 
 
@@ -991,6 +1174,12 @@ def export_html(session_id: int) -> str | None:
         if recon.get('tool_calls'):
             parts.append('<pre><strong>工具调用</strong>\n'
                          f'{_esc(json.dumps(recon["tool_calls"], ensure_ascii=False, indent=2))}</pre>')
+        # 客户端视角：翻译层（Anthropic / Responses）回给客户端的报文与上游不同。
+        # 导出是拿去对外的证据，只带上游那一半等于让对方看不到"我到底收到了什么"。
+        client_recon = full.get('client_recon') or {}
+        if not full.get('passthrough') and client_recon.get('text'):
+            parts.append('<pre><strong>客户端收到的文本</strong>\n'
+                         f'{_esc(client_recon.get("text") or "")}</pre>')
         parts.append('<pre><strong>请求</strong>\n'
                      f'{_esc(json.dumps(req_body, ensure_ascii=False, indent=2, default=str)[:20000])}</pre>')
         if full.get('response_raw'):

@@ -2272,6 +2272,22 @@
     "filterDays": "Time range",
     "filterClient": "Client",
     "timeline": "Timeline · {n} turns",
-    "copyArgs": "Copy arguments"
+    "copyArgs": "Copy arguments",
+    "viewLabel": "Perspective",
+    "view": {
+      "client": "Client",
+      "gateway": "Gateway"
+    },
+    "clientRequest": "Client request body (as sent)",
+    "clientRequestHint": "What the client sent, before the gateway touched it",
+    "upstreamRequest": "Request body sent upstream",
+    "gatewayRequestHint": "What the gateway actually sent after rewriting: model mapping, parameter clamping, image normalisation and stream_options all happen here",
+    "rewrites": "Gateway rewrites",
+    "noRewrite": "Gateway did not rewrite anything — identical to what the client sent",
+    "passthroughNote": "Passthrough: the client received exactly what upstream returned",
+    "translatedNote": "Translated: this is what the client actually received (switch to Gateway for the upstream shape)",
+    "upstreamNote": "Upstream raw: the hop between gateway and upstream (SSE frames or JSON)",
+    "clientRawStream": "Raw stream received by the client",
+    "notCaptured": "Not captured: this record was written before the client perspective existed"
   }
 }

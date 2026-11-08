@@ -82,6 +82,14 @@ export default function TracesPage() {
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [turnId, setTurnId] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
+  /**
+   * 视角：同一轮调用有两份报文。
+   *   · client —— 客户端（下游）手里那份：请求是它原样发的，响应是它真正收到的
+   *     （Anthropic / Responses 已经过网关翻译）；
+   *   · gateway —— 网关（上游）那一跳：请求是改写后发出去的，响应是上游原文。
+   * 默认看客户端视角：用户手里的报错、客户端里显示的回复，说的都是这一份。
+   */
+  const [view, setView] = useState<'client' | 'gateway'>('client');
   const [turn, setTurn] = useState<TapTurn | null>(null);
   const [diff, setDiff] = useState<TapDiff | null>(null);
   const [busy, setBusy] = useState(false);
@@ -481,29 +489,56 @@ export default function TracesPage() {
                   ))}
                 </div>
 
-                <div className="flex flex-wrap gap-1 border-b pb-2">
-                  {(['overview', 'request', 'response', 'diff'] as Tab[]).map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setTab(key)}
-                      className={cn(
-                        'rounded-full px-2.5 py-1 text-xs transition-colors',
-                        tab === key
-                          ? 'bg-primary text-primary-foreground'
-                          : 'text-muted-foreground hover:bg-muted',
-                      )}
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+                  <div className="flex flex-wrap gap-1">
+                    {(['overview', 'request', 'response', 'diff'] as Tab[]).map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setTab(key)}
+                        className={cn(
+                          'rounded-full px-2.5 py-1 text-xs transition-colors',
+                          tab === key
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:bg-muted',
+                        )}
+                      >
+                        {t(`trace.tab.${key}`)}
+                      </button>
+                    ))}
+                  </div>
+                  {/* 视角开关只对「请求 / 响应」有意义：概览与差异读的是同一份数据。 */}
+                  {(tab === 'request' || tab === 'response') && (
+                    <div
+                      role="group"
+                      aria-label={t('trace.viewLabel')}
+                      className="flex items-center rounded-full border p-0.5 text-[11px]"
                     >
-                      {t(`trace.tab.${key}`)}
-                    </button>
-                  ))}
+                      {(['client', 'gateway'] as const).map((key) => (
+                        <button
+                          key={key}
+                          type="button"
+                          aria-pressed={view === key}
+                          onClick={() => setView(key)}
+                          className={cn(
+                            'rounded-full px-2 py-0.5 transition-colors',
+                            view === key
+                              ? 'bg-foreground/10 font-medium'
+                              : 'text-muted-foreground hover:text-foreground',
+                          )}
+                        >
+                          {t(`trace.view.${key}`)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-auto">
                   {!turn && <SkeletonBar className="h-40 w-full" />}
                   {turn && tab === 'overview' && <Overview turn={turn} />}
-                  {turn && tab === 'request' && <RequestTab turn={turn} />}
-                  {turn && tab === 'response' && <ResponseTab turn={turn} />}
+                  {turn && tab === 'request' && <RequestTab turn={turn} view={view} />}
+                  {turn && tab === 'response' && <ResponseTab turn={turn} view={view} />}
                   {turn && tab === 'diff' && (
                     <DiffTab diff={diff} hasPrev={Boolean(before)} />
                   )}
@@ -561,14 +596,7 @@ function Overview({turn}: {turn: TapTurn}) {
       {turn.recon.reasoning && (
         <Block title={t('trace.reconReasoning')} body={turn.recon.reasoning} />
       )}
-      {(turn.recon.tool_calls.length > 0) && (
-        <Block
-          title={t('trace.reconTools')}
-          body={turn.recon.tool_calls
-            .map((c) => `${c.name}(${c.arguments})`)
-            .join('\n\n')}
-        />
-      )}
+      {(turn.recon.tool_calls.length > 0) && <ToolCalls calls={turn.recon.tool_calls} />}
       {!turn.recon.text && !turn.recon.reasoning && !turn.recon.tool_calls.length && (
         <p className="text-xs text-muted-foreground">{t('trace.noRecon')}</p>
       )}
@@ -576,77 +604,150 @@ function Overview({turn}: {turn: TapTurn}) {
   );
 }
 
-/** 请求页签：客户端发来的体 + 网关实际发往上游的体。 */
-function RequestTab({turn}: {turn: TapTurn}) {
+/**
+ * 请求页签：同一个请求的两份报文。
+ *
+ *   · 客户端视角 —— 客户端**原样**发出的体（网关还没碰它）；
+ *   · 网关视角 —— 改写后真正发往上游的体（模型映射、`max_tokens` 钳制、
+ *     图片归一、`stream_options` 注入）。
+ *
+ * 两份都留才排得动「网关有没有偷偷改我的请求」：只看一份时，改了也看不出来。
+ */
+function RequestTab({turn, view}: {turn: TapTurn; view: 'client' | 'gateway'}) {
   const t = useT();
-  const req = turn.request;
-  const body = req && typeof req === 'object'
-    ? (req as Record<string, unknown>).body
+  const req = turn.request && typeof turn.request === 'object'
+    ? (turn.request as Record<string, unknown>)
     : null;
-  const upstream = req && typeof req === 'object'
-    ? (req as Record<string, unknown>).upstream_body
-    : null;
+
   if (!turn.request_ok) {
     return <Block title={t('trace.rawTruncated')} body={turn.request_raw || ''} />;
   }
+
+  const clientBody = req ? req.body : null;
+  // 没有 `upstream_body` 时说明网关没改写（或该记录写于本功能上线前）：
+  // 此时两份是同一份，不该显示成「空的上游请求」。
+  const upstreamBody = req && req.upstream_body !== undefined ? req.upstream_body : clientBody;
+  const rewrites = view === 'gateway' ? rewriteKeys(clientBody, upstreamBody) : [];
+  const shown = view === 'client' ? clientBody : upstreamBody;
+
   return (
     <div className="space-y-3">
       {turn.truncated && (
         <p className="text-[11px] text-amber-600">{t('trace.truncatedHint')}</p>
       )}
-      <Block title={t('trace.requestBody')} body={pretty(body)} />
-      {upstream ? (
-        <Block title={t('trace.upstreamBody')} body={pretty(upstream)} />
+      <p className="text-[11px] text-muted-foreground">
+        {view === 'client' ? t('trace.clientRequestHint') : t('trace.gatewayRequestHint')}
+      </p>
+      {view === 'gateway' && (
+        rewrites.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1 text-[11px]">
+            <span className="text-muted-foreground">{t('trace.rewrites')}</span>
+            {rewrites.map((key) => (
+              <Badge key={key} variant="outline" className="text-[10px]">{key}</Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[11px] text-muted-foreground">{t('trace.noRewrite')}</p>
+        )
+      )}
+      <Block
+        title={view === 'client' ? t('trace.clientRequest') : t('trace.upstreamRequest')}
+        body={pretty(shown)}
+      />
+    </div>
+  );
+}
+
+/** 工具调用列表：参数按原文复制，不重新序列化（模型的空白也是证据）。 */
+function ToolCalls({calls}: {calls: {id: string; name: string; arguments: string}[]}) {
+  const t = useT();
+  return (
+    <section>
+      <h4 className="mb-1 text-xs font-medium">{t('trace.reconTools')}</h4>
+      <div className="space-y-1.5">
+        {calls.map((call, i) => (
+          <div key={`${call.id || 'call'}-${i}`} className="rounded-md border bg-muted/30 p-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate font-mono text-[11px]">
+                {call.name || `#${i + 1}`}
+              </span>
+              <CopyButton value={call.arguments} label={t('trace.copyArgs')} />
+            </div>
+            <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[11px]">
+              {call.arguments || '{}'}
+            </pre>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * 响应页签：同一份回答的两份报文。
+ *
+ *   · 客户端视角 —— 客户端真正收到的（Chat 透传；Anthropic / Responses 是网关
+ *     翻译后的报文，字段名与上游完全不同）；
+ *   · 网关视角 —— 上游原文（SSE 帧 / JSON），用于取证与对照。
+ */
+function ResponseTab({turn, view}: {turn: TapTurn; view: 'client' | 'gateway'}) {
+  const t = useT();
+  const recon = (view === 'client' ? turn.client_recon : turn.upstream_recon) ?? turn.recon;
+  const raw = view === 'client' ? turn.client_response_raw : turn.response_raw;
+  const note = view === 'client'
+    ? (turn.passthrough ? t('trace.passthroughNote') : t('trace.translatedNote'))
+    : t('trace.upstreamNote');
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] text-muted-foreground">{note}</p>
+      {!recon && view === 'client' && !turn.passthrough ? (
+        <p className="text-xs text-muted-foreground">{t('trace.notCaptured')}</p>
+      ) : (
+        <Block title={t('trace.reconText')} body={recon?.text || '—'} />
+      )}
+      {recon?.reasoning ? (
+        <Block title={t('trace.reconReasoning')} body={recon.reasoning} />
+      ) : null}
+      {recon && recon.tool_calls.length > 0 ? <ToolCalls calls={recon.tool_calls} /> : null}
+      {raw ? (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-muted-foreground">
+            {view === 'client' ? t('trace.clientRawStream') : t('trace.rawStream')}
+          </summary>
+          <pre className="mt-1 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2 text-[11px]">
+            {raw}
+          </pre>
+        </details>
       ) : null}
     </div>
   );
 }
 
-/** 响应页签：重建出的模型输出 + 上游原始流（原样保留，便于比对）。 */
-function ResponseTab({turn}: {turn: TapTurn}) {
-  const t = useT();
-  return (
-    <div className="space-y-3">
-      <Block title={t('trace.reconText')} body={turn.recon.text || '—'} />
-      {turn.recon.reasoning && (
-        <Block title={t('trace.reconReasoning')} body={turn.recon.reasoning} />
-      )}
-      {turn.recon.tool_calls.length > 0 && (
-        <section>
-          <h4 className="mb-1 text-xs font-medium">{t('trace.reconTools')}</h4>
-          <div className="space-y-1.5">
-            {turn.recon.tool_calls.map((call, i) => (
-              <div key={`${call.id || 'call'}-${i}`}
-                   className="rounded-md border bg-muted/30 p-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-mono text-[11px]">
-                    {call.name || `#${i + 1}`}
-                  </span>
-                  {/* 复制**原始参数文本**，不重新序列化：模型的空格与换行
-                      是证据的一部分（同 DSH 轨迹检查器的这条约束）。 */}
-                  <CopyButton value={call.arguments}
-                              label={t('trace.copyArgs')} />
-                </div>
-                <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[11px]">
-                  {call.arguments || '{}'}
-                </pre>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-      {turn.response_raw && (
-        <details className="text-xs">
-          <summary className="cursor-pointer text-muted-foreground">
-            {t('trace.rawStream')}
-          </summary>
-          <pre className="mt-1 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2 text-[11px]">
-            {turn.response_raw}
-          </pre>
-        </details>
-      )}
-    </div>
-  );
+/**
+ * 网关改写了哪些顶层字段：两份请求体逐键比较，返回**有差异**的键名。
+ *
+ * 只比顶层：`messages` 里的差异属于「与上一轮对比」那条线的活，堆在这里会把
+ * 「网关改了 model 和 max_tokens」这么一句话埋掉。
+ */
+function rewriteKeys(client: unknown, upstream: unknown): string[] {
+  if (!client || typeof client !== 'object' || !upstream || typeof upstream !== 'object') {
+    return [];
+  }
+  const a = client as Record<string, unknown>;
+  const b = upstream as Record<string, unknown>;
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  const out: string[] = [];
+  keys.forEach((key) => {
+    let same: boolean;
+    try {
+      same = JSON.stringify(a[key]) === JSON.stringify(b[key]);
+    } catch {
+      same = false;
+    }
+    if (!same) out.push(key);
+  });
+  return out.sort();
 }
 
 /** 差异页签：和上一轮比，四块分开看（参数 / system / 消息 / 工具）。 */

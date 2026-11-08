@@ -2245,6 +2245,22 @@
     "filterDays": "期間",
     "filterClient": "クライアント",
     "timeline": "タイムライン · {n} ターン",
-    "copyArgs": "引数をコピー"
+    "copyArgs": "引数をコピー",
+    "viewLabel": "視点",
+    "view": {
+      "client": "クライアント",
+      "gateway": "ゲートウェイ"
+    },
+    "clientRequest": "クライアントのリクエスト本文（そのまま）",
+    "clientRequestHint": "ゲートウェイが触る前の、クライアントが送ったままの内容",
+    "upstreamRequest": "上流へ送ったリクエスト本文",
+    "gatewayRequestHint": "ゲートウェイが書き換えて実際に送った内容：モデルマッピング、パラメータの丸め、画像の正規化、stream_options はここで行われます",
+    "rewrites": "ゲートウェイの書き換え",
+    "noRewrite": "書き換えなし：クライアントが送った内容と同一です",
+    "passthroughNote": "パススルー：クライアントは上流の応答をそのまま受け取っています",
+    "translatedNote": "翻訳済み：クライアントが実際に受け取った内容です（上流の形は「ゲートウェイ」視点）",
+    "upstreamNote": "上流の原文：ゲートウェイと上流の間の通信（SSE フレームまたは JSON）",
+    "clientRawStream": "クライアントが受け取った生ストリーム",
+    "notCaptured": "未取得：この記録はクライアント視点ができる前に書き込まれました"
   }
 }

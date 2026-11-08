@@ -1985,6 +1985,27 @@ export interface TapTurn extends Omit<TapTurnBrief, 'request_bytes' | 'response_
   recon: TapRecon;
   usage: Record<string, unknown>;
   summary: TapTurnSummary;
+
+  /* ── 两端视角 ────────────────────────────────────────────────
+   *
+   * 一次调用有两份请求、两份响应，缺哪一份都排不了「网关/转换层改了什么」：
+   *   · 请求：`request.body` 是客户端**原样**发的，`request.upstream_body`
+   *     是网关改写后发往上游的；
+   *   · 响应：`upstream_*` 是网关卡在上游与客户端中间看到的原文，
+   *     `client_*` 是客户端手里真正收到的那份。
+   *
+   * 对 Chat 协议两者相同（透传），`passthrough` 为 true。
+   */
+  upstream_response: unknown;
+  upstream_response_ok: boolean;
+  upstream_recon: TapRecon;
+  client_response: unknown;
+  client_response_ok: boolean;
+  /** 客户端视角无法解析成 JSON 时的原文（流式或已截断）。 */
+  client_response_raw: string | null;
+  client_recon: TapRecon | null;
+  passthrough: boolean;
+  client_protocol: string;
 }
 
 /** 两轮请求的结构化差异（claude-tap 的 diff 视图）。 */

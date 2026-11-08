@@ -2245,6 +2245,22 @@
     "filterDays": "時間範圍",
     "filterClient": "用戶端",
     "timeline": "時間概覽 · {n} 輪",
-    "copyArgs": "複製參數"
+    "copyArgs": "複製參數",
+    "viewLabel": "視角",
+    "view": {
+      "client": "用戶端",
+      "gateway": "閘道"
+    },
+    "clientRequest": "用戶端請求內容（原樣）",
+    "clientRequestHint": "用戶端（下游）原樣送出的請求 —— 閘道還沒動它",
+    "upstreamRequest": "閘道發往上遊的請求內容",
+    "gatewayRequestHint": "閘道改寫後真正發往上遊的請求：模型映射 / 參數鉗制 / 圖片歸一 / stream_options 都在這一步發生",
+    "rewrites": "閘道改寫",
+    "noRewrite": "閘道未改寫：與用戶端送出的完全一致",
+    "passthroughNote": "透傳：用戶端收到的回應與上遊回傳一致",
+    "translatedNote": "翻譯後：這是用戶端實際收到的封包（上遊形態見「閘道」視角）",
+    "upstreamNote": "上遊原文：閘道與上遊之間那一跳（SSE 幀或 JSON）",
+    "clientRawStream": "用戶端收到的原始串流",
+    "notCaptured": "未擷取：該記錄寫入時還沒有用戶端視角"
   }
 }
