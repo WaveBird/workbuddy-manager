@@ -693,7 +693,7 @@ export default function TracesPage() {
                     description={t('trace.noTurnsDesc')}
                   />
                 ) : (
-                <div className="min-h-0 flex-1 overflow-auto">
+                <div className="min-h-0 flex-1 overflow-auto max-h-[calc(100vh-16rem)]">
                   {!turn && !turnFailed && <SkeletonBar className="h-40 w-full" />}
                   {!turn && turnFailed && (
                     <p className="text-xs text-muted-foreground">{t('trace.turnLoadFailed')}</p>
@@ -1219,7 +1219,7 @@ function Block({title, body}: {title: string; body: string}) {
   return (
     <section>
       <h4 className="mb-1 text-xs font-medium">{title}</h4>
-      <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2 text-[11px]">
+      <pre className="max-h-[min(60vh,32rem)] overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2 text-[11px]">
         {body}
       </pre>
     </section>
