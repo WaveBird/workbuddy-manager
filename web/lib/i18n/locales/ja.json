@@ -2290,6 +2290,19 @@
     "outboundEmpty": "出站トレースは有効ですが、まだこのターンの記録がありません（送信直後、または上流が再起動した可能性）",
     "outboundError": "上流出站ダンプの読み取りに失敗しました：{reason}",
     "outboundPath": "ダンプファイル：{path}",
-    "outboundTruncated": "1 件あたりの上限を超えたため切り詰められました"
+    "outboundTruncated": "1 件あたりの上限を超えたため切り詰められました",
+    "hasAux": "+{n} 補助",
+    "auxInline": "補助呼び出し {n} 件：",
+    "kindTitle": "タイトル",
+    "kindCompact": "圧縮",
+    "formatLabel": "表示",
+    "format": {
+      "preview": "プレビュー",
+      "raw": "生データ"
+    },
+    "diffBefore": "変更前",
+    "diffAfter": "変更後",
+    "locate": "位置へ",
+    "clientResponse": "クライアントが受け取ったレスポンス（翻訳後）"
   }
 }

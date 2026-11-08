@@ -2057,6 +2057,19 @@
     "outboundEmpty": "上游已开启转储，但文件里还没有这一轮的记录（可能刚发出，或上游重启过）",
     "outboundError": "读取上游转储失败：{reason}",
     "outboundPath": "转储文件：{path}",
-    "outboundTruncated": "内容超过单条上限，已截断"
+    "outboundTruncated": "内容超过单条上限，已截断",
+    "hasAux": "+{n} 辅助",
+    "auxInline": "含 {n} 次辅助调用：",
+    "kindTitle": "标题",
+    "kindCompact": "压缩",
+    "formatLabel": "格式",
+    "format": {
+      "preview": "Preview",
+      "raw": "Raw"
+    },
+    "diffBefore": "改前",
+    "diffAfter": "改后",
+    "locate": "定位",
+    "clientResponse": "客户端收到的响应（翻译后）"
   }
 }

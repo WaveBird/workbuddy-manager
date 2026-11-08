@@ -683,9 +683,12 @@ def _link_parent(first_user: str, protocol: str, key_id: int | None,
         # 由长到短试几种前缀：客户端可能把人类消息**截断**后再塞进标题请求
         # （实测遇到过只保留首句的情况），所以只比整条必然对不上。短到 16 个字
         # 仍然足够具体（中文 16 字基本不会撞车），再短就不可靠了。
-        for size in (120, 60, 30, 16):
+        # 下限放到 6 个字：真实的首条消息经常很短（「继续」「hi」「看下这个」），
+        # 卡在 16 字会让这些会话永远挂不上辅助调用（实测：15 字的中文标题就漏了）。
+        # 6 字以上 + 同密钥 + 同协议 + 10 分钟窗，误挂的概率已经很低。
+        for size in (120, 60, 30, 16, 8, 6):
             sig = candidate[:size]
-            if len(sig) >= 16 and sig in needle:
+            if len(sig) >= 6 and sig in needle:
                 return int(row['id'])
     return None
 
@@ -1033,7 +1036,8 @@ def list_sessions(page: int = 1, size: int = 20, days: int | None = None,
     # 「33 轮」而每一轮都点不开 —— 界面上看起来像功能坏了，其实是数字在撒谎。
     rows = db.query(
         f'SELECT s.*, k.name AS key_name, '
-        f'(SELECT COUNT(*) FROM tap_turns t WHERE t.session_id = s.id) AS actual_turns '
+        f'(SELECT COUNT(*) FROM tap_turns t WHERE t.session_id = s.id) AS actual_turns, '
+        f'(SELECT COUNT(*) FROM tap_sessions a WHERE a.parent_id = s.id) AS aux_count '
         f'FROM tap_sessions s '
         f'LEFT JOIN api_keys k ON k.id = s.key_id {clause} '
         f'ORDER BY s.updated_at DESC LIMIT ? OFFSET ?',
@@ -1056,6 +1060,9 @@ def list_sessions(page: int = 1, size: int = 20, days: int | None = None,
                 'started_at': r['started_at'],
                 'updated_at': r['updated_at'],
                 'turns': r['actual_turns'],
+                # 挂在这条会话底下的辅助调用（标题 / 压缩）次数。辅助调用默认
+                # 不单列，但完全看不见也不行 —— 用户会以为「标题没被记下来」。
+                'aux_count': r['aux_count'] or 0,
                 'prompt_tokens': r['prompt_tokens'],
                 'completion_tokens': r['completion_tokens'],
             }
@@ -1092,6 +1099,15 @@ def session(session_id: int) -> dict | None:
         'started_at': row['started_at'],
         'updated_at': row['updated_at'],
         'turns': len(turns),
+        # 名下挂着的辅助调用：界面上可以直接跳过去，不必先去列表打开「显示辅助调用」。
+        'aux': [
+            {'id': c['id'], 'kind': c['kind'], 'ts': c['ts'], 'model': c['model']}
+            for c in db.query(
+                # 会话表没有 `ts` 列（只有 started_at / updated_at）：辅助调用
+                # 按创建时刻排序，用 started_at 即可。
+                'SELECT id, kind, started_at AS ts, model FROM tap_sessions '
+                'WHERE parent_id = ? ORDER BY started_at ASC LIMIT 50', (session_id,))
+        ],
         'prompt_tokens': row['prompt_tokens'],
         'completion_tokens': row['completion_tokens'],
         'items': [

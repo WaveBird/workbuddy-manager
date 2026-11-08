@@ -2317,6 +2317,19 @@
     "outboundEmpty": "Outbound tracing is on, but this turn is not in the file yet (just sent, or the upstream restarted)",
     "outboundError": "Could not read the upstream dump: {reason}",
     "outboundPath": "Dump file: {path}",
-    "outboundTruncated": "Content exceeded the per-record limit and was truncated"
+    "outboundTruncated": "Content exceeded the per-record limit and was truncated",
+    "hasAux": "+{n} aux",
+    "auxInline": "{n} auxiliary calls:",
+    "kindTitle": "title",
+    "kindCompact": "compact",
+    "formatLabel": "Format",
+    "format": {
+      "preview": "Preview",
+      "raw": "Raw"
+    },
+    "diffBefore": "Before",
+    "diffAfter": "After",
+    "locate": "Locate",
+    "clientResponse": "Response received by the client (translated)"
   }
 }

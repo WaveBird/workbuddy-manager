@@ -2290,6 +2290,19 @@
     "outboundEmpty": "上遊已開啟轉儲，但檔案裡還沒有這一輪的記錄（可能剛送出，或上遊重啟過）",
     "outboundError": "讀取上遊轉儲失敗：{reason}",
     "outboundPath": "轉儲檔案：{path}",
-    "outboundTruncated": "內容超過單條上限，已截斷"
+    "outboundTruncated": "內容超過單條上限，已截斷",
+    "hasAux": "+{n} 輔助",
+    "auxInline": "含 {n} 次輔助呼叫：",
+    "kindTitle": "標題",
+    "kindCompact": "壓縮",
+    "formatLabel": "格式",
+    "format": {
+      "preview": "Preview",
+      "raw": "Raw"
+    },
+    "diffBefore": "改前",
+    "diffAfter": "改後",
+    "locate": "定位",
+    "clientResponse": "用戶端收到的回應（翻譯後）"
   }
 }
