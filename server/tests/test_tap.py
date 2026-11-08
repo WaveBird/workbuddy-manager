@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import time
@@ -271,6 +272,62 @@ class PureTest(unittest.TestCase):
         self.assertEqual(tap._client_family('codex_cli_rs/0.9'), 'codex')
         self.assertEqual(tap._client_family('curl/8.4.0'), 'cli')
         self.assertEqual(tap._client_family(None), 'unknown')
+
+
+class OutboundTest(unittest.TestCase):
+    """腾讯视角：按 trace_id 从上游的 JSONL 里取那一跳。
+
+    这里不打真实上游：只验证**读取侧**的三件事 —— 能按 id 精确取、文件不存在
+    与 id 缺失要能区分开（用户看到的提示不同），以及不会因为文件很大而把内存吃掉。
+    """
+
+    def setUp(self) -> None:
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self._tmp.name) / 'outbound-trace.jsonl'
+        os.environ['WB_TAP_OUTBOUND_FILE'] = str(self.path)
+
+    def tearDown(self) -> None:
+        os.environ.pop('WB_TAP_OUTBOUND_FILE', None)
+        self._tmp.cleanup()
+
+    def _write(self, rows: list[dict]) -> None:
+        self.path.write_text('\n'.join(json.dumps(r, ensure_ascii=False) for r in rows) + '\n')
+
+    def test_matches_only_the_wanted_trace(self) -> None:
+        self._write([
+            {'kind': 'request', 'trace_id': 'aaa', 'url': 'https://copilot.tencent.com/v2/x',
+             'method': 'POST', 'headers': {'Authorization': 'Bearer eyJhbG***'},
+             'body': '{"model":"m"}', 'uid': 'u1', 'ts': 1},
+            {'kind': 'response', 'trace_id': 'aaa', 'status': 200, 'ms': 1234,
+             'headers': {'Content-Type': 'text/event-stream'}, 'body': 'data: [DONE]\n', 'ts': 2},
+            {'kind': 'request', 'trace_id': 'bbb', 'url': 'https://other', 'body': '{}', 'ts': 3},
+        ])
+        out = tap.outbound('aaa')
+        self.assertTrue(out['available'])
+        self.assertEqual(len(out['entries']), 2)
+        self.assertEqual([e['kind'] for e in out['entries']], ['request', 'response'])
+        self.assertEqual(out['entries'][0]['url'], 'https://copilot.tencent.com/v2/x')
+        self.assertEqual(out['entries'][1]['status'], 200)
+
+    def test_distinguishes_missing_file_and_missing_id(self) -> None:
+        self.assertEqual(tap.outbound('aaa')['reason'], 'no-file')
+        self.assertEqual(tap.outbound(None)['reason'], 'no-trace')
+        # 文件在、但没有这一轮的 id：**不是错误**（可能刚打完还没落盘，或上游
+        # 只对上部分调用）。接口回「可用但空」，界面据此提示「还没有上游记录」，
+        # 而不是弹一个红字错误。
+        self._write([{'kind': 'request', 'trace_id': 'bbb', 'body': '{}'}])
+        out = tap.outbound('aaa')
+        self.assertTrue(out['available'])
+        self.assertEqual(out['entries'], [])
+
+    def test_truncated_json_line_does_not_break_reading(self) -> None:
+        """写了一半的行（进程被杀）不该让整次查询报错。"""
+        self.path.write_text('{"kind":"request","trace_id":"aaa","url":"https://x"}\n{"kind":"respo')
+        out = tap.outbound('aaa')
+        self.assertTrue(out['available'])
+        self.assertEqual(len(out['entries']), 1)
+        self.assertEqual(out['entries'][0]['url'], 'https://x')
 
 
 class DbTest(unittest.TestCase):
