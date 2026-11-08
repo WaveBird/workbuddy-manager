@@ -504,19 +504,28 @@ export default function TracesPage() {
                       </button>
                     ))}
                   </div>
-                  {/* 视角开关只对「请求 / 响应」有意义：概览与差异读的是同一份数据。 */}
-                  {(tab === 'request' || tab === 'response') && (
-                    <div
-                      role="group"
-                      aria-label={t('trace.viewLabel')}
-                      className="flex items-center rounded-full border p-0.5 text-[11px]"
-                    >
+                  {/* 视角开关**常驻**。
+                      早先只在「请求 / 响应」两个页签里渲染，结果默认停在「概览」时
+                      整排看不见 —— 用户以为功能没做（实测反馈）。现在无论停在哪一
+                      个页签都显示：在概览 / 差异里点它会顺手切到「响应」，因为那
+                      正是两份报文差别最大、最常用视角的地方，避免点了没反应。 */}
+                  <div
+                    role="group"
+                    aria-label={t('trace.viewLabel')}
+                    title={t('trace.viewHint')}
+                    className="flex items-center gap-1.5 text-[11px]"
+                  >
+                    <span className="text-muted-foreground">{t('trace.viewLabel')}</span>
+                    <div className="flex items-center rounded-full border p-0.5">
                       {(['client', 'gateway'] as const).map((key) => (
                         <button
                           key={key}
                           type="button"
                           aria-pressed={view === key}
-                          onClick={() => setView(key)}
+                          onClick={() => {
+                            setView(key);
+                            if (tab !== 'request' && tab !== 'response') setTab('response');
+                          }}
                           className={cn(
                             'rounded-full px-2 py-0.5 transition-colors',
                             view === key
@@ -528,7 +537,7 @@ export default function TracesPage() {
                         </button>
                       ))}
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-auto">
