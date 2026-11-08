@@ -186,12 +186,12 @@ class CommandPaletteInvariantTest(unittest.TestCase):
         self.settings = _settings_entries()
         # 解析失效 → 下面的断言会「一条都没查到」而静默通过。先钉住形状。
         self.assertEqual(
-            len(self.dock), 8,
-            f'从 ManagementBar 里解析出 {len(self.dock)} 个底栏目的地（期望 8）：{self.dock} —— '
+            len(self.dock), 9,
+            f'从 ManagementBar 里解析出 {len(self.dock)} 个底栏目的地（期望 9）：{self.dock} —— '
             '`dockItems` 的写法变了？解析失效会让本类的交叉核对全部空转。',
         )
         self.assertEqual(
-            len(self.sections), 8,
+            len(self.sections), 6,
             f'从 section-nav.ts 里解析出 {len(self.sections)} 项（期望 6）：{self.sections}',
         )
         self.assertEqual(

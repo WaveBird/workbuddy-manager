@@ -48,7 +48,7 @@ _MIN_MAJOR = 22
 
 # 底栏里**不**属于任何一节的 5 个目的地。它们不该因为这一批而消失，
 # 所以在这里写死：写死才是断言（从别处推出来的「应该还在」证明不了它们还在）。
-_OTHER_DESTINATIONS = ['/dashboard', '/stats', '/security', '/settings']
+_OTHER_DESTINATIONS = ['/dashboard', '/stats', '/logs', '/traces', '/security', '/settings']
 
 _ITEM_RE = re.compile(
     r"\{key:\s*'([^']+)',\s*href:\s*'([^']+)',\s*labelKey:\s*'([^']+)',"
@@ -139,7 +139,7 @@ class SectionNavInvariantTest(unittest.TestCase):
         self.nav = _section_nav()
         # 解析失效 → 下面的断言会「一条都没查到」而静默通过。先钉住形状。
         self.assertEqual(
-            sorted(self.nav), ['accounts', 'keys', 'logs', 'models'],
+            sorted(self.nav), ['accounts', 'keys', 'models'],
             f'从 section-nav.ts 里解析出的节不对：{sorted(self.nav)} —— '
             '`SECTION_NAV` 的写法变了？解析失效会让这个类里的断言全部空转。',
         )
@@ -259,17 +259,21 @@ class SectionNavInvariantTest(unittest.TestCase):
             + '\n  '.join(h for h in absorbed if h in hrefs),
         )
 
-    def test_dock_has_exactly_eight_destinations(self) -> None:
-        """底栏**目的地**正好 8 项（动作项没有 href，不计入）。
+    def test_dock_has_exactly_nine_destinations(self) -> None:
+        """底栏**目的地**正好 9 项（动作项没有 href，不计入）。
 
-        写死数量是**有意**的：这一批的验收标准就是「11 → 8」。少一项说明有人
-        顺手删了个入口；多一项说明有人又加了一级入口——两者都该被问一句
-        「它是不是该并进哪一节」。
+        写死数量是**有意**的。历史：批次 4 ② 把 11 项收敛到 8 项；随后「轨迹」
+        （调用抓包）作为**与日志同级**的入口加回来，成为第 9 项 —— 它是「逐轮看
+        这一跑发了什么」的独立动作，与「扫一眼谁用了多少」不是同一件事，因此
+        没有并进日志节的二级导航。
+
+        这条断言仍然值得留：少一项说明有人顺手删了个入口；多一项说明有人又加了
+        一级入口 —— 两者都该被问一句「它是不是该并进哪一节」。
         """
         hrefs = _dock_hrefs()
         self.assertEqual(
-            len(hrefs), 8,
-            f'底栏有 {len(hrefs)} 个目的地，应当是 8 个：{hrefs}',
+            len(hrefs), 9,
+            f'底栏有 {len(hrefs)} 个目的地，应当是 9 个：{hrefs}',
         )
         # 用集合合并：每节的落点也可能同时出现在 _OTHER_DESTINATIONS 里
         # （`/logs` 既是底栏目的地、又是「日志」节的落点），列表相加会把它算两次。

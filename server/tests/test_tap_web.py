@@ -85,33 +85,29 @@ class TapPageLogicTest(unittest.TestCase):
 class TapPageWiringTest(unittest.TestCase):
     """页面接线：四处清单 + 字典。"""
 
-    def test_page_exists_and_renders_section_tabs(self) -> None:
+    def test_page_exists_and_uses_the_api_client(self) -> None:
         self.assertTrue(_PAGE.is_file(), '缺少 /traces 页面')
         code = _code(_PAGE)
-        self.assertIn('<PageSectionTabs />', code,
-                      '抓包页没有渲染二级导航 —— 日志页与抓包页之间就只剩地址栏')
         self.assertIn('tapApi', code)
         self.assertNotIn('fetch(', code,
                          '抓包页出现了裸 fetch：会绕开鉴权失效跳转与 basePath')
 
-    def test_traces_belongs_to_logs_section(self) -> None:
-        source = _SECTION.read_text(encoding='utf-8')
-        self.assertIn("'logs'", source)
-        self.assertRegex(source, r"\{key: 'traces', href: '/traces'")
-        # 落点仍是 /logs（点底栏「日志」不会跳到抓包页）
-        head = re.search(r"logs: \[\n\s*\{key: '(\w+)', href: '([^']+)'", source)
-        self.assertIsNotNone(head, '解析不出 logs 节的落点')
-        assert head is not None
-        self.assertEqual(head.group(2), '/logs')
+    def test_traces_is_a_top_level_destination(self) -> None:
+        """「轨迹」与日志、统计同级：底栏自己的入口，不是日志页的二级导航。
 
-    def test_dock_keeps_eight_destinations(self) -> None:
-        """抓包页**不**占一级入口：它并进「日志」节（底栏 8 项的约束）。"""
+        这条守的是**层级**：并进二级导航虽然也能点进去，但「扫一眼谁用了多少」
+        与「逐轮看这一跑发了什么」是两个动作，藏在别人页签下等于让第二个动作
+        永远少一次曝光。所以这里要求它出现在 dockItems 里，且**不**出现在
+        任何一节的二级导航清单里（两处都有会让同一个页面有两个入口）。
+        """
         code = _code(_BAR)
         start = code.index('const dockItems = [')
         end = code.index('\n  ];', start)
         hrefs = re.findall(r"href:\s*'([^']+)'", code[start:end])
-        self.assertEqual(len(hrefs), 8, f'底栏目的地应为 8 项：{hrefs}')
-        self.assertNotIn('/traces', hrefs)
+        self.assertIn('/traces', hrefs, f'底栏没有「轨迹」入口：{hrefs}')
+        section = _SECTION.read_text(encoding='utf-8')
+        self.assertNotIn("href: '/traces'", section,
+                         '/traces 同时又挂在二级导航里 —— 同一个页面两个入口')
 
     def test_command_palette_lists_traces(self) -> None:
         self.assertIn("href: '/traces'", _PALETTE.read_text(encoding='utf-8'))

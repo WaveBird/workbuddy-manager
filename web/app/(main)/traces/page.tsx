@@ -30,7 +30,6 @@ import {
 } from '@/lib/tap';
 import type {TapDiff, TapSessionDetail, TapTurn, TapTurnBrief} from '@/lib/types';
 import {PageHeader} from '@/components/common/layout/PageHeader';
-import {PageSectionTabs} from '@/components/common/layout/PageSectionTabs';
 import {EmptyState} from '@/components/common/layout/EmptyState';
 import {ConfirmDialog} from '@/components/common/layout/ConfirmDialog';
 import {LoadError} from '@/components/common/states/LoadError';
@@ -254,8 +253,6 @@ export default function TracesPage() {
           </div>
         }
       />
-
-      <PageSectionTabs />
 
       {enabled && cfg && (
         <p className="text-xs text-muted-foreground">

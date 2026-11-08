@@ -90,10 +90,10 @@ check(
 // 剩下的是「只在底栏里出现、任何零依赖模块里都没有」的页面。这里写死它们，
 // 是为了让「多出来的那一项」变成失败；它们与底栏是否一致由 Python 守卫比对
 // （那边能从 ManagementBar.tsx 里解析出真实的 dockItems）。
-const DOCK_ONLY = ['/dashboard', '/stats', '/security', '/settings'];
+const DOCK_ONLY = ['/dashboard', '/stats', '/logs', '/traces', '/security', '/settings'];
 
 check(
-  '不在 section-nav / settings-tabs 里的项，正好是那 4 个底栏专属页',
+  '不在 section-nav / settings-tabs 里的项，正好是那 6 个底栏专属页',
   NAV_COMMANDS.map((c) => c.href)
     .filter((h) => !SECTIONS.some((s) => SECTION_NAV[s].some((i) => i.href === h))
                 && !SETTINGS_TABS.some((tab) => settingsTabHref(tab) === h))

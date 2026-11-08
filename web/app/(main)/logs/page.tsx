@@ -10,7 +10,6 @@ import {useDebounced} from '@/lib/use-debounce';
 import type {ApiKey, RequestLog} from '@/lib/types';
 import {fmtCredit, fmtDateTime, fmtDateTimeMarked, fmtLatency, fmtMoney, fmtNumber} from '@/lib/format';
 import {PageHeader} from '@/components/common/layout/PageHeader';
-import {PageSectionTabs} from '@/components/common/layout/PageSectionTabs';
 import {EmptyState} from '@/components/common/layout/EmptyState';
 import {ConfirmDialog} from '@/components/common/layout/ConfirmDialog';
 import {LoadError} from '@/components/common/states/LoadError';
@@ -284,36 +283,33 @@ export default function LogsPage() {
   }
 
   const header = (
-    <>
-      <PageHeader
-        title={t('logs.title')}
-        description={t('logs.description')}
-        actions={
-          <>
-            {isAdmin && (
-              <ConfirmDialog
-                title={t('logs.clearTitle')}
-                description={t('logs.clearDesc')}
-                confirmText={t('common.clear')}
-                destructive
-                onConfirm={async () => {
-                  await logApi.clear();
-                  notify.ok(t('logs.cleared'));
-                  refetchFromFirstPage();
-                }}
-                trigger={
-                  <Button variant="outline" size="sm" className="rounded-full text-red-500">
-                    <Trash2 />
-                    {t('common.clear')}
-                  </Button>
-                }
-              />
-            )}
-          </>
-        }
-      />
-      <PageSectionTabs />
-    </>
+    <PageHeader
+      title={t('logs.title')}
+      description={t('logs.description')}
+      actions={
+        <>
+          {isAdmin && (
+            <ConfirmDialog
+              title={t('logs.clearTitle')}
+              description={t('logs.clearDesc')}
+              confirmText={t('common.clear')}
+              destructive
+              onConfirm={async () => {
+                await logApi.clear();
+                notify.ok(t('logs.cleared'));
+                refetchFromFirstPage();
+              }}
+              trigger={
+                <Button variant="outline" size="sm" className="rounded-full text-red-500">
+                  <Trash2 />
+                  {t('common.clear')}
+                </Button>
+              }
+            />
+          )}
+        </>
+      }
+    />
   );
 
   /**

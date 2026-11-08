@@ -7,8 +7,6 @@ import {
   Gift,
   KeyRound,
   MessageSquare,
-  Radar,
-  ScrollText,
   Users,
 } from 'lucide-react';
 import {usePathname} from 'next/navigation';
@@ -44,8 +42,6 @@ const ICONS: Record<SectionNavIconKey, ReactNode> = {
   redPackets: <Gift className="h-3.5 w-3.5" />,
   models: <Boxes className="h-3.5 w-3.5" />,
   playground: <MessageSquare className="h-3.5 w-3.5" />,
-  logs: <ScrollText className="h-3.5 w-3.5" />,
-  traces: <Radar className="h-3.5 w-3.5" />,
 };
 
 export function PageSectionTabs() {

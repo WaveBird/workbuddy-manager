@@ -48,18 +48,18 @@ const PREFIX = '/workbuddy-manager';
 
 /* ── 清单本身 ─────────────────────────────────────────────────── */
 
-check('四节', [...SECTIONS], ['accounts', 'keys', 'models', 'logs']);
+check('三节', [...SECTIONS], ['accounts', 'keys', 'models']);
 
 check(
   '每节两项（只有一项就不该叫「二级导航」）',
   SECTIONS.map((s) => SECTION_NAV[s].length),
-  [2, 2, 2, 2],
+  [2, 2, 2],
 );
 
 check(
   '每节第一项是该节的落点，且 href 与节名一致',
   SECTIONS.map((s) => SECTION_NAV[s][0].href),
-  ['/accounts', '/keys', '/models', '/logs'],
+  ['/accounts', '/keys', '/models'],
 );
 
 check(
@@ -107,7 +107,7 @@ check('sectionNavItems 与 SECTION_NAV 一致', sectionNavItems('keys'), SECTION
 
 /* ── isSectionKey ─────────────────────────────────────────────── */
 
-check('isSectionKey 认四节', SECTIONS.map((s) => isSectionKey(s)), [true, true, true, true]);
+check('isSectionKey 认三节', SECTIONS.map((s) => isSectionKey(s)), [true, true, true]);
 check(
   'isSectionKey 不认别的',
   ['', 'accounts2', 'Accounts', 'settings', null, undefined, 7, {}, []]
@@ -177,8 +177,8 @@ check(
 
 check('/dashboard 认不出', at('/dashboard'), null);
 check('/stats 认不出', at('/stats'), null);
-check('/logs 属于日志节', at('/logs'), ['logs', 'logs']);
-check('/traces 属于日志节', at('/traces'), ['logs', 'traces']);
+check('/logs 认不出（它是底栏目的地，没有二级导航）', at('/logs'), null);
+check('/traces 认不出（同上）', at('/traces'), null);
 check('/security 认不出', at('/security'), null);
 check('/ 认不出', at('/'), null);
 check('空串认不出', at(''), null);
@@ -217,7 +217,7 @@ check(
     const found = sectionNavFromPath(i.href, '');
     return found ? found.item.href === i.href && found.section === s : false;
   })),
-  [true, true, true, true, true, true, true, true],
+  [true, true, true, true, true, true],
 );
 
 check(
@@ -226,7 +226,7 @@ check(
     const found = sectionNavFromPath(`${PREFIX}${i.href}`, PREFIX);
     return found ? found.item.href === i.href && found.section === s : false;
   })),
-  [true, true, true, true, true, true, true, true],
+  [true, true, true, true, true, true],
 );
 
 if (failed > 0) {
