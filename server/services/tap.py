@@ -1298,13 +1298,25 @@ def outbound(trace_id: str | None, *, max_scan: int = 4 * 1024 * 1024) -> dict:
                     if entry.get('trace_id') != wanted:
                         continue
                     found.append(entry)
+                # 上游每个路径尝试各写一对（换路径重试是常态）：取**最后一对**——
+                # 它是真正成功（或最终失败）的那次。第一对是失败尝试，正文可能
+                # 只有几十字节，用户会以为「响应怎么这么短」。
                 if len(found) >= 2:
                     break
     except OSError as exc:
         return {'available': False, 'reason': f'io: {exc}', 'entries': [], 'path': str(path)}
 
     found.sort(key=lambda e: (e.get('kind') != 'request', e.get('ts', 0)))
-    return {'available': True, 'reason': '', 'entries': found, 'path': str(path)}
+    # 多对时只留**最新**的一对（换路径重试会写多对；按 ts 各取最大）。
+    latest: dict[str, dict] = {}
+    for entry in found:
+        kind = entry.get('kind')
+        if kind not in ('request', 'response'):
+            continue
+        if kind not in latest or entry.get('ts', 0) >= latest[kind].get('ts', 0):
+            latest[kind] = entry
+    entries = [latest[k] for k in ('request', 'response') if k in latest]
+    return {'available': True, 'reason': '', 'entries': entries, 'path': str(path)}
 
 
 def delete_session(session_id: int) -> bool:
