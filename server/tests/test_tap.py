@@ -574,6 +574,38 @@ class DbTest(unittest.TestCase):
                    if s['kind'] != 'main')
         self.assertEqual(aux['parent_id'], main_session)
 
+    def test_aux_link_matches_truncated_human_message(self) -> None:
+        """标题请求里的人类消息可能被客户端**截断**（只保留首句）。
+
+        只比「整条前缀」会落空：主会话的首条 user 是长段落，标题请求里只带了开头
+        一句话。所以归属要由长到短试若干前缀（下限见 `_link_parent`，短消息也覆盖）。
+        """
+        tap.save_settings({'enabled': True})
+        long_text = ('http://127.0.0.1:7864/settings/backup/ 帮我看下如何备份和还原 '
+                     'workbuddy-manager 的数据，以及账号数据是否已经持久化在容器外。'
+                     '如果持久化了，重建容器能不能恢复已经添加的账户。')
+        main_body = _body(messages=[BODY['messages'][0],
+                                    {'role': 'user', 'content': long_text}])
+        main_turn = self._capture(body=main_body)
+        assert main_turn is not None
+        main_session = tap.turn_view(main_turn)['session_id']
+
+        truncated = long_text[:40]  # 客户端只带了开头一句
+        title_body = {
+            'messages': [
+                {'role': 'system',
+                 'content': 'Create a concise title for an AI coding-assistant session '
+                            'from the supplied human messages.'},
+                {'role': 'user',
+                 'content': 'Generate the session title from this JSON array of human '
+                            'messages: [{"seq":1,"text":"' + truncated + '"}]'},
+            ],
+        }
+        self._capture(body=title_body)
+        aux = next(s for s in tap.list_sessions(include_aux=True)['items']
+                   if s['kind'] != 'main')
+        self.assertEqual(aux['parent_id'], main_session, '截断的人类消息也要能挂回主会话')
+
     def test_compaction_is_aux_but_normal_summary_is_not(self) -> None:
         # 压缩（compaction）同样是客户端在会话中途发的独立请求；而「帮我总结这篇
         # 文章」是正常对话，不能因为出现 summar* 就被当成辅助调用。
