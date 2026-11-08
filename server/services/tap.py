@@ -78,13 +78,19 @@ _TOKEN_RULES = (
 # 客户端家族：UA 归类。与 gateway.client_channel 同思路，但**不**复用那个函数 ——
 # 它在 routers 里，services 反向导入 routers 会绕成环。归类口径只需粗到
 # 「这轮是 Claude Code 还是 Codex」，两处各自维护一张表比制造循环导入便宜。
+# 已知客户端的归类表。**顺序有意义**：先匹配到的赢（`claude-code` 里也含
+# `claude`，但两者归一类，不冲突；而 `copilot` 不能出现在 vscode 之前，否则
+# GitHub Copilot 之外的任何带 copilot 字样的 UA 都会被抢走）。
 _CLIENT_RULES = (
-    ('claude', ('claude-code', 'claude_cli', 'claude')),
+    ('claude', ('claude-code', 'claude_cli', 'claude-cli', 'claude', 'anthropic')),
     ('codex', ('codex',)),
+    # DeepSeek Harness（dsh）：UA 形如
+    # `deepseek-harness/0.2.2-rc.1 (+https://github.com/deepseek-ai/deepseek-harness)`
+    ('dsh', ('deepseek-harness', 'deepseek_harness')),
     ('cursor', ('cursor',)),
-    ('vscode', ('vscode', 'visual studio code', 'copilot')),
+    ('vscode', ('vscode', 'visual studio code', 'github-copilot', 'copilot-chat')),
     ('cli', ('curl', 'wget', 'httpie', 'python-httpx', 'python-requests',
-             'go-http-client', 'node', 'undici')),
+             'go-http-client', 'node', 'undici', 'postman', 'insomnia')),
 )
 
 _turn_writes = 0
@@ -277,13 +283,38 @@ def _fingerprint(body: object, protocol: str) -> str:
 
 
 def _client_family(ua: str | None) -> str:
-    text = (ua or '').lower()
+    """UA → 客户端家族。
+
+    **认不出来时不再统一叫 `other`**：UA 的第一个 product token 本身就是客户端
+    名（`deepseek-harness/0.2.2-rc.1` → `deepseek-harness`）。早先一律回落成
+    `other`，界面上就只剩一个「其它」——用户看得出来 UA 里明明写着是什么客户端，
+    面板却说不知道（实测反馈）。回落成 token 之后，新客户端不需要改代码也能被
+    正确显示；真正的空 UA 才记 `unknown`。
+    """
+    text = (ua or '').strip()
     if not text:
         return 'unknown'
+    low = text.lower()
     for family, needles in _CLIENT_RULES:
-        if any(n in text for n in needles):
+        if any(n in low for n in needles):
             return family
-    return 'other'
+    token = re.split(r'[/\s]', text)[0].lower()
+    token = re.sub(r'[^a-z0-9._-]', '', token)[:24]
+    return token or 'other'
+
+
+def _client_version(ua: str | None) -> str:
+    """从 UA 的第一个 product token 里取版本号（`name/1.2.3` → `1.2.3`）。
+
+    抓包页把它显示在客户端名后面：同一个客户端的不同版本行为可能不同（协议字段、
+    工具调用形态都变过），只写名字在排障时不够用。
+    """
+    if not ua:
+        return ''
+    first = ua.strip().split(' ')[0]
+    if '/' not in first:
+        return ''
+    return re.sub(r'[^0-9A-Za-z.\-]', '', first.split('/', 1)[1])[:24]
 
 
 def _clip(text: str, limit: int) -> tuple[str, bool]:
@@ -573,7 +604,8 @@ def client_reconstruct(client_text: str | None, protocol: str) -> dict | None:
 
 # ── 写入 ─────────────────────────────────────────────────
 def _session_id(fingerprint: str, key_id: int | None, client: str,
-                protocol: str, model: str | None, now: int) -> int:
+                protocol: str, model: str | None, now: int,
+                ua: str | None = None) -> int:
     row = db.query_one(
         'SELECT id FROM tap_sessions WHERE fingerprint = ? '
         'AND COALESCE(key_id, 0) = COALESCE(?, 0) AND protocol = ? '
@@ -581,12 +613,19 @@ def _session_id(fingerprint: str, key_id: int | None, client: str,
         (fingerprint, key_id, protocol, now - _SESSION_IDLE_SECONDS),
     )
     if row:
+        # 首轮没有 UA（或旧记录还没有这一列）时，用后续轮补齐 —— UA 是事实，
+        # client 只是从它派生的分类，能补就补。
+        db.execute(
+            'UPDATE tap_sessions SET client_ua = COALESCE(client_ua, ?) WHERE id = ?',
+            (_clean(ua, 200), row['id']),
+        )
         return int(row['id'])
     return db.execute(
-        'INSERT INTO tap_sessions(fingerprint, key_id, client, protocol, model, '
-        'started_at, updated_at, turns, prompt_tokens, completion_tokens) '
-        'VALUES(?, ?, ?, ?, ?, ?, ?, 0, 0, 0)',
-        (fingerprint, key_id, client, protocol, _clean(model, 128), now, now),
+        'INSERT INTO tap_sessions(fingerprint, key_id, client, client_ua, protocol, '
+        'model, started_at, updated_at, turns, prompt_tokens, completion_tokens) '
+        'VALUES(?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0)',
+        (fingerprint, key_id, client, _clean(ua, 200), protocol,
+         _clean(model, 128), now, now),
     )
 
 
@@ -641,7 +680,7 @@ def capture(*, body: object, headers: Iterable[tuple[str, str]] | None,
         if isinstance(body, dict) and isinstance(body.get('model'), str):
             model = body['model']
         session_id = _session_id(fingerprint, key['id'] if key else None,
-                                 client, protocol, model, now)
+                                 client, protocol, model, now, ua)
         row = db.query_one('SELECT turns FROM tap_sessions WHERE id = ?', (session_id,))
         seq = int(row['turns']) + 1 if row else 1
 
@@ -752,6 +791,44 @@ def prune() -> dict[str, int]:
 
 
 # ── 查询 ─────────────────────────────────────────────────
+def backfill_clients() -> int:
+    """按入库的 UA 重新归类旧会话。返回改动条数。
+
+    为什么需要：`client` 是**派生**值（从 UA 算出来的）。分类规则一改（例如
+    早先把认不出的 UA 一律记成 `other`），历史记录不会自己变对 —— 而它们恰好是
+    用户已经看着的那批。UA 原文一直存在 `tap_turns.request_json` 里，所以可以
+    原地重算，不必重新抓。
+    """
+    changed = 0
+    rows = db.query('SELECT id, client, client_ua FROM tap_sessions')
+    for row in rows:
+        ua = row['client_ua']
+        if not ua:
+            turn_row = db.query_one(
+                'SELECT request_json FROM tap_turns WHERE session_id = ? '
+                'ORDER BY seq ASC LIMIT 1', (row['id'],))
+            if turn_row:
+                doc, ok = _loads(turn_row['request_json'])
+                if ok and isinstance(doc, dict):
+                    headers = doc.get('headers') or {}
+                    if isinstance(headers, dict):
+                        for key, value in headers.items():
+                            if str(key).lower() == 'user-agent':
+                                ua = str(value)
+                                break
+        if not ua:
+            continue
+        family = _client_family(ua)
+        # 分类没变也要补写 UA：旧记录有 UA 原文却缺 `client_ua`，缺了版本号，
+        # 界面上就只能显示一个光秃秃的客户端名。
+        if family == row['client'] and row['client_ua']:
+            continue
+        db.execute('UPDATE tap_sessions SET client = ?, client_ua = ? WHERE id = ?',
+                   (family, _clean(ua, 200), row['id']))
+        changed += 1
+    return changed
+
+
 def stats() -> dict:
     row = db.query_one(
         'SELECT COUNT(*) AS sessions, '
@@ -802,6 +879,7 @@ def list_sessions(page: int = 1, size: int = 20, days: int | None = None,
                 'key_id': r['key_id'],
                 'key_name': r['key_name'],
                 'client': r['client'],
+                'client_ua': r['client_ua'],
                 'protocol': r['protocol'],
                 'model': r['model'],
                 'started_at': r['started_at'],
@@ -835,6 +913,7 @@ def session(session_id: int) -> dict | None:
         'key_id': row['key_id'],
         'key_name': row['key_name'],
         'client': row['client'],
+        'client_ua': row['client_ua'],
         'protocol': row['protocol'],
         'model': row['model'],
         'started_at': row['started_at'],

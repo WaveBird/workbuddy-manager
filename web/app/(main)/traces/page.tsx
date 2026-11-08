@@ -20,6 +20,7 @@ import {notify} from '@/lib/toast';
 import {useT} from '@/lib/i18n/provider';
 import {
   clientLabel,
+  clientVersion,
   diffIsEmpty,
   fmtBytes,
   fmtMs,
@@ -413,7 +414,8 @@ export default function TracesPage() {
                     </p>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
                       {t('trace.sessionMeta', {
-                        client: clientLabel(session.client),
+                        client: clientLabel(session.client)
+                          + (clientVersion(session.client_ua) ? ` ${clientVersion(session.client_ua)}` : ''),
                         protocol: session.protocol,
                         key: session.key_name || '—',
                         time: fmtDateTime(session.started_at),

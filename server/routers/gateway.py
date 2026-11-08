@@ -499,7 +499,10 @@ def client_channel(ua: str | None) -> str:
         return 'unknown'
     if 'codex' in text:
         return 'codex'
-    if 'claude-code' in text or 'claude code' in text:
+    if 'claude' in text or 'anthropic' in text:
+        # UA 实际有 `claude-code/…`、`claude-cli/2.0.1 (external, cli)`、
+        # `claude_cli/…` 几种写法；早先只认前两种，于是**真正的 Claude Code CLI**
+        # 在请求日志里被记成 other（轨迹页的同类守卫实测发现）。
         return 'claude-code'
     if 'deepseek' in text or 'dsh' in text:
         return 'dsh'
