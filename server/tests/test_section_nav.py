@@ -48,7 +48,7 @@ _MIN_MAJOR = 22
 
 # 底栏里**不**属于任何一节的 5 个目的地。它们不该因为这一批而消失，
 # 所以在这里写死：写死才是断言（从别处推出来的「应该还在」证明不了它们还在）。
-_OTHER_DESTINATIONS = ['/dashboard', '/stats', '/logs', '/security', '/settings']
+_OTHER_DESTINATIONS = ['/dashboard', '/stats', '/security', '/settings']
 
 _ITEM_RE = re.compile(
     r"\{key:\s*'([^']+)',\s*href:\s*'([^']+)',\s*labelKey:\s*'([^']+)',"
@@ -139,7 +139,7 @@ class SectionNavInvariantTest(unittest.TestCase):
         self.nav = _section_nav()
         # 解析失效 → 下面的断言会「一条都没查到」而静默通过。先钉住形状。
         self.assertEqual(
-            sorted(self.nav), ['accounts', 'keys', 'models'],
+            sorted(self.nav), ['accounts', 'keys', 'logs', 'models'],
             f'从 section-nav.ts 里解析出的节不对：{sorted(self.nav)} —— '
             '`SECTION_NAV` 的写法变了？解析失效会让这个类里的断言全部空转。',
         )
@@ -271,11 +271,14 @@ class SectionNavInvariantTest(unittest.TestCase):
             len(hrefs), 8,
             f'底栏有 {len(hrefs)} 个目的地，应当是 8 个：{hrefs}',
         )
-        expected = sorted([items[0][1] for items in self.nav.values()] + _OTHER_DESTINATIONS)
+        # 用集合合并：每节的落点也可能同时出现在 _OTHER_DESTINATIONS 里
+        # （`/logs` 既是底栏目的地、又是「日志」节的落点），列表相加会把它算两次。
+        expected = sorted(set([items[0][1] for items in self.nav.values()]
+                              + _OTHER_DESTINATIONS))
         self.assertEqual(
             sorted(hrefs), expected,
-            '底栏的目的地与预期不符。预期的另外 5 项（'
-            + '、'.join(_OTHER_DESTINATIONS) + '）各有独立的心智模型，不该被合并。',
+            '底栏的目的地与预期不符。预期的另外 ' + str(len(_OTHER_DESTINATIONS))
+            + ' 项（' + '、'.join(_OTHER_DESTINATIONS) + '）各有独立的心智模型，不该被合并。',
         )
 
     def test_every_page_in_a_section_renders_the_tabs(self) -> None:

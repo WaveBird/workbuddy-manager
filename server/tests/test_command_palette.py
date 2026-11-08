@@ -51,7 +51,7 @@ _MIN_MAJOR = 22
 # 面板里的条目数：底栏 8 个目的地 + 被吸收的 3 页 + 设置页 10 个 Tab（含代理与监控）。
 # 写死是**有意**的：数量变了说明有人加了页面却没想清楚它该出现在哪，
 # 那一步值得被问一句。三处来源的并集也在同一条断言里交叉核对。
-_EXPECTED_TOTAL = 21
+_EXPECTED_TOTAL = 22
 
 # 必须渲染出来的定位标记。验收脚本按它们断言；少一个就有一条断言恒真。
 _REQUIRED_SLOTS = (
@@ -191,7 +191,7 @@ class CommandPaletteInvariantTest(unittest.TestCase):
             '`dockItems` 的写法变了？解析失效会让本类的交叉核对全部空转。',
         )
         self.assertEqual(
-            len(self.sections), 6,
+            len(self.sections), 8,
             f'从 section-nav.ts 里解析出 {len(self.sections)} 项（期望 6）：{self.sections}',
         )
         self.assertEqual(

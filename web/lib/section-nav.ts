@@ -56,7 +56,9 @@ export type SectionNavIconKey =
   | 'keys'
   | 'redPackets'
   | 'models'
-  | 'playground';
+  | 'playground'
+  | 'logs'
+  | 'traces';
 
 export type SectionNavItem = {
   /** 稳定标识，与 `href` 一一对应。测试与调试用。 */
@@ -70,7 +72,7 @@ export type SectionNavItem = {
 };
 
 /** 有二级导航的「节」。顺序即 `sectionNavFromPath` 的匹配顺序。 */
-export const SECTIONS = ['accounts', 'keys', 'models'] as const;
+export const SECTIONS = ['accounts', 'keys', 'models', 'logs'] as const;
 
 export type SectionKey = (typeof SECTIONS)[number];
 
@@ -92,6 +94,13 @@ export const SECTION_NAV: Record<SectionKey, readonly SectionNavItem[]> = {
   models: [
     {key: 'models', href: '/models', labelKey: 'nav.models', iconKey: 'models'},
     {key: 'playground', href: '/playground', labelKey: 'nav.playground', iconKey: 'playground'},
+  ],
+  // 抓包与请求日志是同一件事的两半：日志回答「谁用了多少」，抓包回答
+  // 「这一轮到底发了什么」。排查时几乎总是先看到异常日志、再点进对应会话，
+  // 所以它们属于同一节，而不是两个一级入口（底栏 8 项那条约束也据此成立）。
+  logs: [
+    {key: 'logs', href: '/logs', labelKey: 'nav.logs', iconKey: 'logs'},
+    {key: 'traces', href: '/traces', labelKey: 'nav.traces', iconKey: 'traces'},
   ],
 };
 

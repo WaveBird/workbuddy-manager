@@ -223,8 +223,11 @@ Threat model and hardening notes: [security notes](docs/security-notes.md) and t
 - **No outbound IP pool**: only **inbound** IP control is implemented. Binding a dedicated
   egress IP / proxy per Tencent account would require proxy-pool support in the upstream Go
   service and is out of scope here.
-- Request and response **bodies are not stored** — only metadata (model, status, tokens,
-  latency, source), to protect privacy.
+- Request and response **bodies are not stored by default** — only metadata (model,
+  status, tokens, latency, source), to protect privacy. When you need to answer "why did
+  the model say that", turn on capture under Logs → Traces: content stays on this machine,
+  credentials are redacted first, and records expire on the retention window
+  (see [request traces](docs/api-traffic-tap.md)).
 - Usage is aggregated per day × key × model; hourly granularity would require extending the
   `usage_daily` table.
 
@@ -240,6 +243,7 @@ Threat model and hardening notes: [security notes](docs/security-notes.md) and t
 - [Deployment guide](deploy/README.md) — reverse proxy, HTTPS, Windows, updates
 - [Account proxy routes](docs/account-proxy-routes.md) — per-account egress
 - [API tokens](docs/api-tokens.md) — read-only tokens and scopes
+- [Request traces](docs/api-traffic-tap.md) — replay the full context of every call
 - [Page watchdog](docs/watchdog.md) — upstream page change detection, LLM triage, email / QQ alerts
 - [QQ notifications & open API](docs/qq-bot.md) — AstrBot integration, UMO, bot control boundaries
 

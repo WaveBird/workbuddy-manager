@@ -44,6 +44,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .. import config, keysvc, upstreamsvc
+from ..services import tap as tap_svc
 from . import gateway
 
 logger = logging.getLogger('workbuddy.responses')
@@ -1746,6 +1747,14 @@ async def _handle(request: Request) -> JSONResponse | StreamingResponse:
                 latency, ua, None if resp.status_code < 400 else str(data)[:500], False,
                 usage=usage, effort=effort,
             )
+            tap_svc.capture(
+                body=body, headers=request.headers.items(), key=key, ua=ua,
+                path='/v1/responses', protocol='responses',
+                status=resp.status_code, latency_ms=latency, stream=False,
+                payload=data, usage=usage,
+                error=None if resp.status_code < 400 else str(data)[:500],
+                upstream_body=payload,
+            )
             if resp.status_code >= 400:
                 return _failed(_upstream_error_text(data, resp), resp.status_code,
                                hint=gateway._error_hint(data))
@@ -1772,6 +1781,12 @@ async def _handle(request: Request) -> JSONResponse | StreamingResponse:
             latency = int((time.time() - started) * 1000)
             gateway._record(key, ip, model, mapped or '', 502, 0, 0, latency, ua, str(exc), False,
                             account_expected=gateway._account_expected_after_error(exc))
+            tap_svc.capture(
+                body=body, headers=request.headers.items(), key=key, ua=ua,
+                path='/v1/responses', protocol='responses', status=502,
+                latency_ms=latency, stream=False, error=str(exc),
+                upstream_body=payload,
+            )
             return _failed(f'上游不可用：{exc}', 502)
 
     # ── 流式 ──
@@ -1813,6 +1828,9 @@ async def _handle(request: Request) -> JSONResponse | StreamingResponse:
         return _failed(_upstream_error_text(parsed, None, fallback=text),
                        resp.status_code, hint=gateway._error_hint(parsed))
 
+    # 抓包用的原始流缓冲（`pending` 会被逐行消费，拼不出完整响应，同 gateway）
+    raw_stream = tap_svc.RawStream()
+
     async def gen():
         pending = ''
         translator = _StreamTranslator(
@@ -1823,7 +1841,9 @@ async def _handle(request: Request) -> JSONResponse | StreamingResponse:
 
         try:
             async for chunk in resp.aiter_bytes():
-                pending += chunk.decode('utf-8', errors='ignore')
+                piece = chunk.decode('utf-8', errors='ignore')
+                raw_stream.feed(piece)
+                pending += piece
 
                 if len(pending) > MAX_SSE_BUFFER:
                     logger.warning('SSE 缓冲超过 %d 字节仍未见换行，中止转发', MAX_SSE_BUFFER)
@@ -1902,6 +1922,13 @@ async def _handle(request: Request) -> JSONResponse | StreamingResponse:
                 _as_int(usage.get('completion_tokens')),
                 latency, ua, error_text, True,
                 usage=usage, first_token=first_token_ms, effort=effort,
+            )
+            tap_svc.capture(
+                body=body, headers=request.headers.items(), key=key, ua=ua,
+                path='/v1/responses', protocol='responses', status=200,
+                latency_ms=latency, first_token_ms=first_token_ms, stream=True,
+                text=raw_stream.text(), usage=usage, error=error_text,
+                upstream_body=payload,
             )
 
     return StreamingResponse(gen(), status_code=200, media_type='text/event-stream')
