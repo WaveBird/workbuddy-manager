@@ -1938,6 +1938,8 @@ export interface TapSession {
   kind: string;
   /** 辅助调用所属的主会话 id。 */
   parent_id: number | null;
+  /** 这条主会话底下挂了几次辅助调用（标题 / 压缩）。 */
+  aux_count?: number;
   /** 客户端说的协议：chat / anthropic / responses。 */
   protocol: string;
   model: string | null;
@@ -1973,6 +1975,8 @@ export interface TapTurnBrief {
 
 export interface TapSessionDetail extends TapSession {
   items: TapTurnBrief[];
+  /** 挂在它名下的辅助调用（点一下可跳转）。 */
+  aux?: {id: number; kind: string; ts: number; model: string | null}[];
 }
 
 /** 请求体的结构摘要（后端现算，不落库）。 */

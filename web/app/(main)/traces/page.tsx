@@ -377,11 +377,17 @@ export default function TracesPage() {
                       {sessionTitle(s)}
                     </span>
                     <span className="flex shrink-0 items-center gap-1">
-                      {s.kind !== 'main' && (
+                      {s.kind !== 'main' ? (
                         <Badge className="bg-amber-500/15 text-[10px] text-amber-700">
                           {t('trace.auxBadge')}
                         </Badge>
-                      )}
+                      ) : (s.aux_count ?? 0) > 0 ? (
+                        // 主会话下面挂着辅助调用时给个数字：辅助调用默认不单列，
+                        // 但完全看不见会让人以为「标题没被记下来」。
+                        <span className="text-[10px] text-muted-foreground">
+                          {t('trace.hasAux', {n: s.aux_count ?? 0 })}
+                        </span>
+                      ) : null}
                       <Badge variant="outline" className="text-[10px]">
                         {clientLabel(s.client)}
                       </Badge>
@@ -450,6 +456,21 @@ export default function TracesPage() {
                             {t('trace.auxJump')}
                           </button>
                         ) : null}
+                      </p>
+                    )}
+                    {(session.aux?.length ?? 0) > 0 && (
+                      <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                        {t('trace.auxInline', {n: session.aux?.length ?? 0})}
+                        {(session.aux ?? []).map((a) => (
+                          <button
+                            key={a.id}
+                            type="button"
+                            className="rounded-full border px-1.5 py-0.5 underline decoration-dotted"
+                            onClick={() => { setSessionId(a.id); setTurnId(null); }}
+                          >
+                            {a.kind === 'compact' ? t('trace.kindCompact') : t('trace.kindTitle')} #{a.id}
+                          </button>
+                        ))}
                       </p>
                     )}
                     <p className="mt-0.5 text-[11px] text-muted-foreground">

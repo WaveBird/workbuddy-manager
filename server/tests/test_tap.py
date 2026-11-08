@@ -520,6 +520,15 @@ class DbTest(unittest.TestCase):
         self.assertEqual(aux['kind'], 'title')
         self.assertEqual(aux['parent_id'], main_session, '辅助调用没有挂回主会话')
 
+        # 主会话要能看到「我名下挂了 1 次辅助调用」，详情里也能直接列出来
+        listed = next(s for s in items if s['kind'] == 'main')
+        self.assertEqual(listed['aux_count'], 1)
+        detail = tap.session(main_session)
+        assert detail is not None
+        self.assertEqual(len(detail['aux']), 1)
+        self.assertEqual(detail['aux'][0]['id'], aux['id'])
+        self.assertEqual(detail['aux'][0]['kind'], 'title')
+
     def test_aux_link_survives_escaped_newlines(self) -> None:
         """标题请求里的文本是 JSON 序列化过的（字面量 \\n），主会话存的是真换行。
 
@@ -543,6 +552,24 @@ class DbTest(unittest.TestCase):
             ],
         }
         self._capture(body=title_body)
+        aux = next(s for s in tap.list_sessions(include_aux=True)['items']
+                   if s['kind'] != 'main')
+        self.assertEqual(aux['parent_id'], main_session)
+
+    def test_short_first_message_still_links(self) -> None:
+        """首条消息很短（15 字以内的中文）也必须能挂上 —— 早期下限卡在 16 字时漏了。"""
+        tap.save_settings({'enabled': True})
+        short = '验证辅助调用归属：这条是主会话'
+        main_turn = self._capture(body=_body(messages=[
+            BODY['messages'][0], {'role': 'user', 'content': short}]))
+        assert main_turn is not None
+        main_session = tap.turn_view(main_turn)['session_id']
+        self._capture(body={'messages': [
+            {'role': 'system',
+             'content': 'Create a concise title for an AI coding-assistant session.'},
+            {'role': 'user',
+             'content': f'Generate the session title from this JSON array: [{{"text":"{short}"}}]'},
+        ]})
         aux = next(s for s in tap.list_sessions(include_aux=True)['items']
                    if s['kind'] != 'main')
         self.assertEqual(aux['parent_id'], main_session)
