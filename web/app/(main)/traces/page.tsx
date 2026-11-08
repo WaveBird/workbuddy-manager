@@ -368,7 +368,9 @@ export default function TracesPage() {
       )}
 
       {!list.isInitialLoading && enabled && (
-        <div className="grid min-h-[60vh] gap-4 lg:grid-cols-[320px_1fr]">
+        // 1fr 列必须写成 minmax(0,1fr)：默认 minmax(auto,1fr) 的 min 是内容宽，
+        // 长报文会把列撑到 1800+px，页面横向滚（实测）。
+        <div className="grid min-h-[60vh] gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           {/* ── 会话列表 ── */}
           <div className="flex min-h-0 flex-col gap-3 rounded-xl border bg-muted/20 p-3">
             <div className="flex flex-col gap-2">
@@ -710,11 +712,15 @@ export default function TracesPage() {
                   )}
                   {turn && tab === 'overview' && <Overview turn={turn} />}
                   {turn && tab === 'request' && (
-                    <RequestTab turn={turn} view={view} outbound={outbound}
-                                format={format} highlight={focusPath} />
+                    <div className="min-w-0">
+                      <RequestTab turn={turn} view={view} outbound={outbound}
+                                  format={format} highlight={focusPath} />
+                    </div>
                   )}
                   {turn && tab === 'response' && (
-                    <ResponseTab turn={turn} view={view} outbound={outbound} format={format} />
+                    <div className="min-w-0">
+                      <ResponseTab turn={turn} view={view} outbound={outbound} format={format} />
+                    </div>
                   )}
                   {turn && tab === 'diff' && (
                     <DiffTab diff={diff} hasPrev={Boolean(before)} onLocate={(path) => {
@@ -904,14 +910,16 @@ function asHeaders(value: unknown): [string, string][] {
 function Headers({title, items}: {title: string; items: [string, string][]}) {
   const t = useT();
   return (
-    <section>
+    // min-w-0 一路锁到底：flex/grid 的 min-width:auto 会让任何一层被长值撑开，
+    // 断行（break-words / truncate）全部失效 —— 页面横向滚（实测 scrollWidth 2278）。
+    <section className="min-w-0">
       <h4 className="mb-1 text-xs font-medium">{title}</h4>
       {items.length === 0 ? (
         <p className="text-[11px] text-muted-foreground">{t('trace.noHeaders')}</p>
       ) : (
-        <dl className="max-h-56 overflow-auto rounded-md bg-muted/40 p-2 text-[11px]">
+        <dl className="max-h-56 min-w-0 overflow-auto rounded-md bg-muted/40 p-2 text-[11px]">
           {items.map(([key, value]) => (
-            <div key={key} className="flex gap-2 py-0.5">
+            <div key={key} className="flex min-w-0 gap-2 py-0.5">
               <dt className="w-40 shrink-0 truncate font-mono text-muted-foreground">{key}</dt>
               <dd className="min-w-0 flex-1 break-words font-mono">{value || '—'}</dd>
             </div>
@@ -1356,14 +1364,16 @@ function OutboundSide({outbound, side}: {
 
   const isReq = side === 'request';
   return (
-    <div className="space-y-3">
+    // min-w-0 是关键：flex/grid 子元素默认 min-width:auto，长 URL / 长词会把
+    // 父容器撑到内容宽 —— 页面跟着横向滚（实测反馈）。锁住后由 break-all 断行。
+    <div className="min-w-0 space-y-3">
       <p className="text-[11px] text-muted-foreground">{t('trace.outboundHint')}</p>
-      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px]">
         {isReq
           ? <Badge variant="outline" className="font-mono">{entry.method}</Badge>
           : <Badge variant="outline" className="font-mono">{entry.status ?? '—'}</Badge>}
         {isReq
-          ? <span className="break-all font-mono text-muted-foreground">{entry.url}</span>
+          ? <span className="min-w-0 break-all font-mono text-muted-foreground">{entry.url}</span>
           : (
             <span className="text-muted-foreground">
               {t('trace.outboundDuration', {ms: entry.ms ?? 0})}
@@ -1375,10 +1385,12 @@ function OutboundSide({outbound, side}: {
         title={isReq ? t('trace.outboundReqHeaders') : t('trace.outboundRespHeaders')}
         items={headerPairs(entry.headers)}
       />
-      <Block
-        title={isReq ? t('trace.outboundReqBody') : t('trace.outboundRespBody')}
-        body={entry.body || '—'}
-      />
+      <div className="min-w-0">
+        <Block
+          title={isReq ? t('trace.outboundReqBody') : t('trace.outboundRespBody')}
+          body={entry.body || '—'}
+        />
+      </div>
       {entry.truncated && (
         <p className="text-[11px] text-amber-600">{t('trace.outboundTruncated')}</p>
       )}
