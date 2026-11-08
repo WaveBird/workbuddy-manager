@@ -85,6 +85,11 @@ export default function TracesPage() {
   const [client, setClient] = useState('all');
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState('');
+  /**
+   * 是否显示辅助调用（会话标题生成这类）。默认不显示：它们属于某条主会话，
+   * 单列出来会让人以为「一次对话被记了两条」——实测反馈。
+   */
+  const [showAux, setShowAux] = useState(false);
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [turnId, setTurnId] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
@@ -97,6 +102,8 @@ export default function TracesPage() {
    */
   const [view, setView] = useState<'client' | 'gateway'>('client');
   const [turn, setTurn] = useState<TapTurn | null>(null);
+  /** 单轮正文取不到（404 / 网络错误）：要明确说，而不是让骨架屏一直转。 */
+  const [turnFailed, setTurnFailed] = useState(false);
   const [diff, setDiff] = useState<TapDiff | null>(null);
   const [outbound, setOutbound] = useState<TapOutbound | null>(null);
   const [busy, setBusy] = useState(false);
@@ -108,10 +115,11 @@ export default function TracesPage() {
       cfg: () => tapApi.config(),
       sessions: () => tapApi.sessions({
         page, size: PAGE_SIZE, days, client, q: settledQuery || undefined,
+        include_aux: showAux ? 1 : undefined,
       }),
     },
     [],
-    [page, client, settledQuery, days],
+    [page, client, settledQuery, days, showAux],
   );
 
   const cfg = list.values.cfg;
@@ -157,12 +165,15 @@ export default function TracesPage() {
     }
     let alive = true;
     setTurn(null);
+    setTurnFailed(false);
     tapApi.turn(turnId)
       .then((data) => {
         if (alive) setTurn(data);
       })
       .catch((e) => {
-        if (alive) notify.err(errText(e));
+        if (!alive) return;
+        setTurnFailed(true);
+        notify.err(errText(e));
       });
     return () => {
       alive = false;
@@ -357,6 +368,12 @@ export default function TracesPage() {
                 placeholder={t('trace.search')}
                 className="h-8 text-xs"
               />
+              {/* 辅助调用（标题生成等）默认折叠：它们是同一次对话的一部分 */}
+              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Switch checked={showAux} onCheckedChange={setShowAux}
+                        aria-label={t('trace.showAux')} />
+                {t('trace.showAux')}
+              </label>
             </div>
 
             <div className="min-h-0 flex-1 space-y-1.5 overflow-auto">
@@ -385,9 +402,16 @@ export default function TracesPage() {
                     <span className="truncate text-xs font-medium">
                       {sessionTitle(s)}
                     </span>
-                    <Badge variant="outline" className="shrink-0 text-[10px]">
-                      {clientLabel(s.client)}
-                    </Badge>
+                    <span className="flex shrink-0 items-center gap-1">
+                      {s.kind !== 'main' && (
+                        <Badge className="bg-amber-500/15 text-[10px] text-amber-700">
+                          {t('trace.auxBadge')}
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className="text-[10px]">
+                        {clientLabel(s.client)}
+                      </Badge>
+                    </span>
                   </div>
                   <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
                     <span>{fmtDateTime(s.updated_at)}</span>
@@ -438,6 +462,22 @@ export default function TracesPage() {
                     <p className="truncate text-sm font-medium">
                       {sessionTitle(session)}
                     </p>
+                    {session.kind !== 'main' && (
+                      <p className="mt-1 text-[11px] text-amber-600">
+                        {session.parent_id
+                          ? t('trace.auxOf', {id: session.parent_id})
+                          : t('trace.auxUnlinked')}
+                        {session.parent_id ? (
+                          <button
+                            type="button"
+                            className="ml-1 underline"
+                            onClick={() => { setSessionId(session.parent_id); setTurnId(null); }}
+                          >
+                            {t('trace.auxJump')}
+                          </button>
+                        ) : null}
+                      </p>
+                    )}
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
                       {t('trace.sessionMeta', {
                         client: clientLabel(session.client)
@@ -568,8 +608,20 @@ export default function TracesPage() {
                   </div>
                 </div>
 
+                {items.length === 0 ? (
+                  // 会话在、明细没了（典型来源：数据库损坏后只恢复出汇总）。
+                  // 必须说清楚 —— 早先这里只是一直转骨架屏，看起来像功能坏了。
+                  <EmptyState
+                    icon={Radar}
+                    title={t('trace.noTurnsTitle')}
+                    description={t('trace.noTurnsDesc')}
+                  />
+                ) : (
                 <div className="min-h-0 flex-1 overflow-auto">
-                  {!turn && <SkeletonBar className="h-40 w-full" />}
+                  {!turn && !turnFailed && <SkeletonBar className="h-40 w-full" />}
+                  {!turn && turnFailed && (
+                    <p className="text-xs text-muted-foreground">{t('trace.turnLoadFailed')}</p>
+                  )}
                   {turn && tab === 'overview' && <Overview turn={turn} />}
                   {turn && tab === 'request' && <RequestTab turn={turn} view={view} />}
                   {turn && tab === 'response' && <ResponseTab turn={turn} view={view} />}
@@ -578,6 +630,7 @@ export default function TracesPage() {
                     <DiffTab diff={diff} hasPrev={Boolean(before)} />
                   )}
                 </div>
+                )}
               </>
             )}
           </div>

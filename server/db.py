@@ -465,6 +465,16 @@ CREATE TABLE IF NOT EXISTS tap_sessions (
   -- 原始 UA。版本号从这里取（同一客户端不同版本行为会变），也用于把旧记录
   -- 重新归类（`client` 是**派生**值，UA 才是事实）。
   client_ua         TEXT,
+  -- 首条 user 消息（截断）。存下来是为了把**辅助调用**挂回它所属的主会话：
+  -- 标题生成这类请求会把人类消息原文塞在自己的 user 内容里，用它做包含匹配
+  -- 就能精确对上，不必猜时间窗。
+  first_user        TEXT,
+  -- 会话类型：main（一轮对话）/ title（会话标题生成）等辅助调用。
+  -- 辅助调用有自己的 system prompt，指纹必然与主会话不同 —— 不标记的话，
+  -- 一次对话会在列表里显示成两条，看起来像"重复记录"（实测反馈）。
+  kind              TEXT    NOT NULL DEFAULT 'main',
+  -- 辅助调用所属的主会话 id（对不上时为 NULL）。
+  parent_id         INTEGER,
   -- 客户端说的协议（chat / anthropic / responses）。上游一律是 OpenAI 形态，
   -- 这个字段记的是**进来时**的协议 —— 它决定请求体怎么解读。
   protocol          TEXT    NOT NULL DEFAULT 'chat',
@@ -733,6 +743,9 @@ _MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ('tap_turns', 'trace_id', 'TEXT'),
     # 抓包会话的原始 UA（版本号从这里取；旧记录按它重新归类）
     ('tap_sessions', 'client_ua', 'TEXT'),
+    ('tap_sessions', 'first_user', 'TEXT'),
+    ('tap_sessions', 'kind', "TEXT NOT NULL DEFAULT 'main'"),
+    ('tap_sessions', 'parent_id', 'INTEGER'),
     ('request_logs', 'credit', 'REAL'),
     ('usage_daily', 'credit', 'REAL NOT NULL DEFAULT 0'),
     # 首字延迟：可空（历史记录与非流式请求为 NULL）

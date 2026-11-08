@@ -711,6 +711,8 @@ export interface UsagePoint {
    * 可选：老版本后端不返回该字段，界面按 0 处理（不显示失败）。
    */
   failed?: number;
+  /** 当日成功请求数（2xx，issue #369 第 3 点）；同样来自 request_logs。 */
+  success?: number;
 }
 
 /**
@@ -731,6 +733,8 @@ export interface UsageHourPoint {
   credit: number;
   /** 该小时的失败请求数（来自请求日志，与 `UsagePoint.failed` 同一口径） */
   failed: number;
+  /** 该小时的成功请求数（2xx） */
+  success?: number;
 }
 
 /** 一天的积分收入 / 支出（`/api/stats/credits` 的 daily 项） */
@@ -788,6 +792,25 @@ export interface AccountUsageRow {
   tokens: number;
   credit: number;
   cost: number | null;
+}
+
+export interface AccountModelUsageRow {
+  account: string;
+  nickname: string;
+  uid8: string;
+  model: string;
+  requests: number;
+  tokens: number;
+  credit: number;
+  cost: number | null;
+}
+
+export interface AccountModelUsageResponse {
+  items: AccountModelUsageRow[];
+  total: number;
+  truncated: boolean;
+  from: string;
+  to: string;
 }
 
 export interface AccountUsageResponse {
@@ -1911,6 +1934,10 @@ export interface TapSession {
   client: string | null;
   /** 原始 UA。`client` 是从它派生的分类，版本号也从这里取。 */
   client_ua?: string | null;
+  /** `main` = 一轮对话；`title` 等 = 辅助调用（会话标题生成），属于某条主会话。 */
+  kind: string;
+  /** 辅助调用所属的主会话 id。 */
+  parent_id: number | null;
   /** 客户端说的协议：chat / anthropic / responses。 */
   protocol: string;
   model: string | null;

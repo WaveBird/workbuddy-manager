@@ -10,6 +10,7 @@ import type {
   DailyTask,
   CreditsFlow,
   AccountUsageResponse,
+  AccountModelUsageResponse,
   ApiKey,
   ApiToken,
   AuditLogPage,
@@ -657,6 +658,8 @@ export const tapApi = {
   prune: () => post<{turns: number; stats: TapConfigResponse['stats']}>('/api/tap/prune'),
   sessions: (params: Record<string, unknown>) =>
     get<{total: number; items: TapSession[]}>('/api/tap/sessions', params),
+  /** 触发一次历史重算：按库里已有的 UA 重新归类、并把辅助调用挂回主会话。 */
+  backfill: () => post<{changed: number; aux: number}>('/api/tap/backfill'),
   session: (id: number) => get<TapSessionDetail>(`/api/tap/sessions/${id}`),
   remove: (id: number) => del<{ok: boolean}>(`/api/tap/sessions/${id}`),
   turn: (id: number) => get<TapTurn>(`/api/tap/turns/${id}`),
@@ -704,6 +707,9 @@ export const statsApi = {
   /** 按「日期 × 账号」聚合（issue #402）；同一范围解析规则 */
   byAccount: (days = 30, realm?: Realm, range?: StatsRange) =>
     get<AccountUsageResponse>('/api/stats/by-account', {days, realm, ...range}),
+  /** 按「账号 × 模型」聚合（issue #369） */
+  byAccountModel: (days = 30, realm?: Realm, range?: StatsRange) =>
+    get<AccountModelUsageResponse>('/api/stats/by-account-model', {days, realm, ...range}),
   /**
    * 上游自己那份统计（issue #59）。口径与本页其它数字不同：含**直连上游**的调用，
    * 且是自上游进程启动以来的累计（没有时段概念）。
