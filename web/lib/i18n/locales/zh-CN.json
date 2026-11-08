@@ -2054,7 +2054,7 @@
     "outboundDuration": "耗时 {ms} ms",
     "outboundUnavailable": "上游没有开启出站转储，看不到这一段。请在 workbuddy2api 的 config.json 里把 outbound_trace.enabled 设为 true（默认关闭）",
     "outboundNoTrace": "这一轮没有关联键（开启出站转储之前的记录），无法回查上游那一跳",
-    "outboundEmpty": "上游已开启转储，但文件里还没有这一轮的记录（可能刚发出，或上游重启过）",
+    "outboundEmpty": "上游已开启转储，但这一轮不在最近的记录里（转储按时间滚动，只保留最近约 16 MB——大约最近一小时的调用；更早的轮次查不到了）",
     "outboundError": "读取上游转储失败：{reason}",
     "outboundPath": "转储文件：{path}",
     "outboundTruncated": "内容超过单条上限，已截断",

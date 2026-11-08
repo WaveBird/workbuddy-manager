@@ -2314,7 +2314,7 @@
     "outboundDuration": "{ms} ms",
     "outboundUnavailable": "Outbound tracing is off in the upstream, so this hop is not visible. Set outbound_trace.enabled to true in workbuddy2api config.json (off by default)",
     "outboundNoTrace": "This turn has no correlation id (recorded before outbound tracing was enabled), so the upstream hop cannot be looked up",
-    "outboundEmpty": "Outbound tracing is on, but this turn is not in the file yet (just sent, or the upstream restarted)",
+    "outboundEmpty": "The upstream dump is enabled, but this turn is not among the recent records (the dump keeps roughly the last 16 MB — about the past hour; older turns are no longer reachable)",
     "outboundError": "Could not read the upstream dump: {reason}",
     "outboundPath": "Dump file: {path}",
     "outboundTruncated": "Content exceeded the per-record limit and was truncated",

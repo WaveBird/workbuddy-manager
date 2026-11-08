@@ -2287,7 +2287,7 @@
     "outboundDuration": "{ms} ms",
     "outboundUnavailable": "上流で出站トレースが無効なため、この区間は表示できません。workbuddy2api の config.json で outbound_trace.enabled を true にしてください（既定は無効）",
     "outboundNoTrace": "このターンには関連キーがありません（出站トレース有効化前の記録）",
-    "outboundEmpty": "出站トレースは有効ですが、まだこのターンの記録がありません（送信直後、または上流が再起動した可能性）",
+    "outboundEmpty": "上流のダンプは有効ですが、このターンは最近の記録にありません（ダンプは直近約 16 MB——おおよそ過去 1 時間分を保持し、それより古いターンは参照できません）",
     "outboundError": "上流出站ダンプの読み取りに失敗しました：{reason}",
     "outboundPath": "ダンプファイル：{path}",
     "outboundTruncated": "1 件あたりの上限を超えたため切り詰められました",

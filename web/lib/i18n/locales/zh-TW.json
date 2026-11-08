@@ -2287,7 +2287,7 @@
     "outboundDuration": "耗時 {ms} ms",
     "outboundUnavailable": "上遊沒有開啟出站轉儲，看不到這一段。請在 workbuddy2api 的 config.json 裡把 outbound_trace.enabled 設為 true（預設關閉）",
     "outboundNoTrace": "這一輪沒有關聯鍵（開啟出站轉儲之前的記錄），無法回查上遊那一跳",
-    "outboundEmpty": "上遊已開啟轉儲，但檔案裡還沒有這一輪的記錄（可能剛送出，或上遊重啟過）",
+    "outboundEmpty": "上遊已開啟轉儲，但這一輪不在最近的記錄裡（轉儲按時間滾動，只保留最近約 16 MB——大約最近一小時的呼叫；更早的輪次查不到了）",
     "outboundError": "讀取上遊轉儲失敗：{reason}",
     "outboundPath": "轉儲檔案：{path}",
     "outboundTruncated": "內容超過單條上限，已截斷",

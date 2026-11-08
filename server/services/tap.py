@@ -1256,12 +1256,15 @@ def _outbound_path() -> Path:
                                '/opt/workbuddy2api/data/outbound-trace.jsonl'))
 
 
-def outbound(trace_id: str | None, *, max_scan: int = 4 * 1024 * 1024) -> dict:
+def outbound(trace_id: str | None, *, max_scan: int = 16 * 1024 * 1024) -> dict:
     """按 trace_id 取上游出站记录（腾讯视角）。
 
-    **从文件尾部倒着扫**而不是整份读入：这个文件随调用线性增长（一天几万行很
-    正常），而查的永远是最近那一轮。倒扫 4 MB 覆盖「刚打完就看」的场景，也把
-    「一次查看拖垮内存」这条路堵死。
+    **从文件尾部倒着扫**而不是整份读入：这个文件随调用线性增长，而查的永远是
+    最近那一轮。窗口给 16 MB：实测**单行**可达 260 KB（64 KB 请求 + SSE 响应全文
+    各一行），一个 42 轮的长会话几小时内就能写出几十 MB（minimax 那次 64 MB，
+    要查的轮落在 53 MB 处）—— 4 MB / 8 MB 都会「翻完就查不到」。16 MB 覆盖
+    「最近一小时左右的调用」；再往前属于历史，如实提示「已滑出窗口」。仍不
+    整份读入 ——「一次查看拖垮内存」这条路不能开。
     """
     path = _outbound_path()
     if not trace_id:

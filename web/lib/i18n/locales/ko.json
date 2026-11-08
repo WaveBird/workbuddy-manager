@@ -2287,7 +2287,7 @@
     "outboundDuration": "{ms} ms",
     "outboundUnavailable": "업스트림에서 출站 추적이 꺼져 있어 이 구간을 볼 수 없습니다. workbuddy2api 의 config.json 에서 outbound_trace.enabled 를 true 로 설정하세요(기본 꺼짐)",
     "outboundNoTrace": "이 턴에는 연관 키가 없습니다(출站 추적 활성화 이전 기록)",
-    "outboundEmpty": "출站 추적은 켜져 있지만 아직 이 턴의 기록이 없습니다(방금 전송했거나 업스트림 재시작)",
+    "outboundEmpty": "업스트림 덤프가 켜져 있지만 이 턴은 최근 기록에 없습니다(덤프는 최근 약 16 MB — 대략 최근 1시간치만 보관하며, 그보다 오래된 턴은 조회할 수 없습니다)",
     "outboundError": "업스트림 덤프를 읽지 못했습니다: {reason}",
     "outboundPath": "덤프 파일: {path}",
     "outboundTruncated": "건당 상한을 넘어 잘렸습니다",
