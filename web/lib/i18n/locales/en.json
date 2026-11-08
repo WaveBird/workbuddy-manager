@@ -2244,8 +2244,7 @@
       "overview": "Overview",
       "request": "Request",
       "response": "Response",
-      "diff": "Diff with previous",
-      "tencent": "Tencent"
+      "diff": "Diff with previous"
     },
     "model": "Model",
     "mappedModel": "Mapped model",
@@ -2280,7 +2279,8 @@
     "viewLabel": "Perspective",
     "view": {
       "client": "Client",
-      "gateway": "Gateway"
+      "gateway": "Gateway",
+      "tencent": "Tencent"
     },
     "clientRequest": "Client request body (as sent)",
     "clientRequestHint": "What the client sent, before the gateway touched it",
@@ -2293,7 +2293,7 @@
     "upstreamNote": "Upstream raw: the hop between gateway and upstream (SSE frames or JSON)",
     "clientRawStream": "Raw stream received by the client",
     "notCaptured": "Not captured: this record was written before the client perspective existed",
-    "viewHint": "Switch perspective: what the client (downstream) actually sent and received, or what the gateway (upstream) rewrote and got back",
+    "viewHint": "Client (downstream) as sent and received; gateway (upstream) as rewritten and returned; Tencent is what workbuddy2api finally sent and got back (outbound dump)",
     "headers": "Headers (client)",
     "upstreamHeaders": "Headers (gateway → upstream)",
     "headersHint": "Credentials are masked, keeping the first 6 characters so you can still tell which key it was",

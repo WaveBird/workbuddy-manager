@@ -1984,8 +1984,7 @@
       "overview": "概览",
       "request": "请求",
       "response": "响应",
-      "diff": "与上一轮对比",
-      "tencent": "腾讯"
+      "diff": "与上一轮对比"
     },
     "model": "模型",
     "mappedModel": "映射模型",
@@ -2020,7 +2019,8 @@
     "viewLabel": "视角",
     "view": {
       "client": "客户端",
-      "gateway": "网关"
+      "gateway": "网关",
+      "tencent": "腾讯"
     },
     "clientRequest": "客户端请求体（原样）",
     "clientRequestHint": "客户端（下游）原样发出的请求 —— 网关还没碰它",
@@ -2033,7 +2033,7 @@
     "upstreamNote": "上游原文：网关与上游之间那一跳（SSE 帧或 JSON）",
     "clientRawStream": "客户端收到的原始流",
     "notCaptured": "未采集：该记录写入时还没有客户端视角",
-    "viewHint": "切换视角：客户端（下游）实际发出与收到的那份，或网关（上游）改写后发出与拿回的那份",
+    "viewHint": "客户端（下游）实际发出与收到的那份；网关（上游）改写后发出与拿回的那份；腾讯是 workbuddy2api 最终发出与腾讯返回的那份（出站转储）",
     "headers": "请求头（客户端）",
     "upstreamHeaders": "请求头（网关发往上游）",
     "headersHint": "密钥类字段已打码（保留前 6 位，足以认出是哪一把）",

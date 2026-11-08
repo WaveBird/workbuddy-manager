@@ -2217,8 +2217,7 @@
       "overview": "概覽",
       "request": "請求",
       "response": "回應",
-      "diff": "與上一輪對比",
-      "tencent": "騰訊"
+      "diff": "與上一輪對比"
     },
     "model": "模型",
     "mappedModel": "映射模型",
@@ -2253,7 +2252,8 @@
     "viewLabel": "視角",
     "view": {
       "client": "用戶端",
-      "gateway": "閘道"
+      "gateway": "閘道",
+      "tencent": "騰訊"
     },
     "clientRequest": "用戶端請求內容（原樣）",
     "clientRequestHint": "用戶端（下游）原樣送出的請求 —— 閘道還沒動它",
@@ -2266,7 +2266,7 @@
     "upstreamNote": "上遊原文：閘道與上遊之間那一跳（SSE 幀或 JSON）",
     "clientRawStream": "用戶端收到的原始串流",
     "notCaptured": "未擷取：該記錄寫入時還沒有用戶端視角",
-    "viewHint": "切換視角：用戶端（下游）實際送出與收到的那份，或閘道（上遊）改寫後送出與拿回的那份",
+    "viewHint": "用戶端（下游）實際送出與收到的那份；閘道（上遊）改寫後送出與拿回的那份；騰訊是 workbuddy2api 最終送出與騰訊回傳的那份（出站轉儲）",
     "headers": "請求標頭（用戶端）",
     "upstreamHeaders": "請求標頭（閘道發往上遊）",
     "headersHint": "金鑰類欄位已遮罩（保留前 6 位，足以認出是哪一把）",

@@ -59,7 +59,7 @@ import {cn} from '@/lib/utils';
 const PAGE_SIZE = 20;
 
 /** 详情面板的四个页签。差异不是常驻请求：只在切到它时才算。 */
-type Tab = 'overview' | 'request' | 'response' | 'tencent' | 'diff';
+type Tab = 'overview' | 'request' | 'response' | 'diff';
 
 /** 稳定空数组：每次渲染现写 `[]` 会让下游依赖它的 memo 每帧重算（同日志页）。 */
 const EMPTY_TURNS: TapTurnBrief[] = [];
@@ -100,7 +100,17 @@ export default function TracesPage() {
    *   · gateway —— 网关（上游）那一跳：请求是改写后发出去的，响应是上游原文。
    * 默认看客户端视角：用户手里的报错、客户端里显示的回复，说的都是这一份。
    */
-  const [view, setView] = useState<'client' | 'gateway'>('client');
+  /**
+   * 视角：同一轮调用有三份报文，请求 / 响应逐段一一对应。
+   *   · client —— 客户端（下游）手里那份：请求是它原样发的，响应是它真正收到的；
+   *   · gateway —— 网关与上游之间那一跳：请求是改写后发出去的，响应是上游原文；
+   *   · tencent —— workbuddy2api 与腾讯之间那一跳（出站转储）：请求是它最终
+   *     发出的（含会话头族与风控头），响应是腾讯返回的 SSE 原文。
+   * 三个视角共用「请求 / 响应」两个页签 —— 报文本就一一对应，单独开一个
+   * 「腾讯」页签会把同一轮拆成两处看（实测反馈），还让人误以为请求与响应
+   * 不在同屏。
+   */
+  const [view, setView] = useState<'client' | 'gateway' | 'tencent'>('client');
   const [turn, setTurn] = useState<TapTurn | null>(null);
   /** 单轮正文取不到（404 / 网络错误）：要明确说，而不是让骨架屏一直转。 */
   const [turnFailed, setTurnFailed] = useState(false);
@@ -186,9 +196,10 @@ export default function TracesPage() {
     [turn, session],
   );
 
-  /** 腾讯视角按需取：只有切到该页签才去读上游转储文件。 */
+  /** 腾讯视角按需取：选了该视角、且停在请求 / 响应页签时才读上游转储。 */
   useEffect(() => {
-    if (tab !== 'tencent' || !turnId) {
+    const wantsOutbound = view === 'tencent' && (tab === 'request' || tab === 'response');
+    if (!wantsOutbound || !turnId) {
       setOutbound(null);
       return;
     }
@@ -203,7 +214,7 @@ export default function TracesPage() {
     return () => {
       alive = false;
     };
-  }, [tab, turnId]);
+  }, [view, tab, turnId]);
 
   useEffect(() => {
     if (tab !== 'diff' || !turn || !before) {
@@ -556,7 +567,7 @@ export default function TracesPage() {
 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
                   <div className="flex flex-wrap gap-1">
-                    {(['overview', 'request', 'response', 'tencent', 'diff'] as Tab[]).map((key) => (
+                    {(['overview', 'request', 'response', 'diff'] as Tab[]).map((key) => (
                       <button
                         key={key}
                         type="button"
@@ -585,13 +596,15 @@ export default function TracesPage() {
                   >
                     <span className="text-muted-foreground">{t('trace.viewLabel')}</span>
                     <div className="flex items-center rounded-full border p-0.5">
-                      {(['client', 'gateway'] as const).map((key) => (
+                      {(['client', 'gateway', 'tencent'] as const).map((key) => (
                         <button
                           key={key}
                           type="button"
                           aria-pressed={view === key}
                           onClick={() => {
                             setView(key);
+                            // 停在概览 / 差异时点视角：切到「响应」，那里最能看出
+                            // 三个视角的差别；请求 / 响应页签则原地切换。
                             if (tab !== 'request' && tab !== 'response') setTab('response');
                           }}
                           className={cn(
@@ -623,9 +636,8 @@ export default function TracesPage() {
                     <p className="text-xs text-muted-foreground">{t('trace.turnLoadFailed')}</p>
                   )}
                   {turn && tab === 'overview' && <Overview turn={turn} />}
-                  {turn && tab === 'request' && <RequestTab turn={turn} view={view} />}
-                  {turn && tab === 'response' && <ResponseTab turn={turn} view={view} />}
-                  {turn && tab === 'tencent' && <TencentTab outbound={outbound} />}
+                  {turn && tab === 'request' && <RequestTab turn={turn} view={view} outbound={outbound} />}
+                  {turn && tab === 'response' && <ResponseTab turn={turn} view={view} outbound={outbound} />}
                   {turn && tab === 'diff' && (
                     <DiffTab diff={diff} hasPrev={Boolean(before)} />
                   )}
@@ -693,19 +705,32 @@ function Overview({turn}: {turn: TapTurn}) {
 }
 
 /**
- * 请求页签：同一个请求的两份报文。
+ * 请求页签：同一个请求的三份报文（按视角切换）。
  *
  *   · 客户端视角 —— 客户端**原样**发出的体（网关还没碰它）；
  *   · 网关视角 —— 改写后真正发往上游的体（模型映射、`max_tokens` 钳制、
- *     图片归一、`stream_options` 注入）。
+ *     图片归一、`stream_options` 注入）；
+ *   · 腾讯视角 —— workbuddy2api 最终发出的体（来自上游出站转储）：会话头族、
+ *     风控头、gzip、换路径重试都在这一跳发生。
  *
- * 两份都留才排得动「网关有没有偷偷改我的请求」：只看一份时，改了也看不出来。
+ * 都留才排得动「中间哪一环改了请求」：只看一份时，改了也看不出来。
+ * tencent 视角的报文不在库里，而在上游写的转储文件里 —— 取不到时给出
+ * **指向原因**的提示（没开启 / 没有该轮 / 文件不存在），而不是一片空白。
  */
-function RequestTab({turn, view}: {turn: TapTurn; view: 'client' | 'gateway'}) {
+function RequestTab({turn, view, outbound}: {
+  turn: TapTurn;
+  view: 'client' | 'gateway' | 'tencent';
+  outbound: TapOutbound | null;
+}) {
   const t = useT();
   const req = turn.request && typeof turn.request === 'object'
     ? (turn.request as Record<string, unknown>)
     : null;
+
+  // 腾讯视角：整页换成出站转储里那一跳（请求侧），不走库里的两份。
+  if (view === 'tencent') {
+    return <OutboundSide outbound={outbound} side="request" />;
+  }
 
   if (!turn.request_ok) {
     return <Block title={t('trace.rawTruncated')} body={turn.request_raw || ''} />;
@@ -832,8 +857,18 @@ function ToolCalls({calls}: {calls: {id: string; name: string; arguments: string
  *     翻译后的报文，字段名与上游完全不同）；
  *   · 网关视角 —— 上游原文（SSE 帧 / JSON），用于取证与对照。
  */
-function ResponseTab({turn, view}: {turn: TapTurn; view: 'client' | 'gateway'}) {
+function ResponseTab({turn, view, outbound}: {
+  turn: TapTurn;
+  view: 'client' | 'gateway' | 'tencent';
+  outbound: TapOutbound | null;
+}) {
   const t = useT();
+
+  // 腾讯视角：整页换成出站转储里那一跳（响应侧：状态码、耗时、SSE 原文）。
+  if (view === 'tencent') {
+    return <OutboundSide outbound={outbound} side="response" />;
+  }
+
   const recon = (view === 'client' ? turn.client_recon : turn.upstream_recon) ?? turn.recon;
   const raw = view === 'client' ? turn.client_response_raw : turn.response_raw;
   const note = view === 'client'
@@ -1097,7 +1132,16 @@ function Timeline({
  *   2. 开了但这一轮没有关联键（功能上线前的老记录）；
  *   3. 文件在、id 也在，但还没写进这一轮（刚发出 / 上游重启过）。
  */
-function TencentTab({outbound}: {outbound: TapOutbound | null}) {
+/**
+ * 出站转储的某一侧（请求或响应）。腾讯视角的「请求 / 响应」两个页签共用。
+ *
+ * 三种「看不到」各有提示，别让人对着空白猜：上游没开转储（含开启方式）、
+ * 这一轮没有 trace id（功能上线前的老记录）、文件在但没匹配到该轮。
+ */
+function OutboundSide({outbound, side}: {
+  outbound: TapOutbound | null;
+  side: 'request' | 'response';
+}) {
   const t = useT();
   if (!outbound) return <SkeletonBar className="h-32 w-full" />;
 
@@ -1119,41 +1163,38 @@ function TencentTab({outbound}: {outbound: TapOutbound | null}) {
     );
   }
 
-  const req = outbound.entries.find((e) => e.kind === 'request');
-  const resp = outbound.entries.find((e) => e.kind === 'response');
-  if (!req && !resp) {
+  const entry = outbound.entries.find((e) => e.kind === side);
+  // 有转储但没有这一侧（另一侧先到 / 这一侧缺失）：如实说，别当错误。
+  if (!entry) {
     return <p className="text-xs text-muted-foreground">{t('trace.outboundEmpty')}</p>;
   }
 
+  const isReq = side === 'request';
   return (
     <div className="space-y-3">
-      <p className="text-[11px] text-muted-foreground">
-        {t('trace.outboundHint')}
-      </p>
-      {req && (
-        <>
-          <div className="flex flex-wrap items-center gap-2 text-[11px]">
-            <Badge variant="outline" className="font-mono">{req.method}</Badge>
-            <span className="break-all font-mono text-muted-foreground">{req.url}</span>
-          </div>
-          <Headers title={t('trace.outboundReqHeaders')} items={headerPairs(req.headers)} />
-          <Block title={t('trace.outboundReqBody')} body={req.body || '—'} />
-        </>
-      )}
-      {resp && (
-        <>
-          <div className="flex flex-wrap items-center gap-2 text-[11px]">
-            <Badge variant="outline" className="font-mono">{resp.status ?? '—'}</Badge>
+      <p className="text-[11px] text-muted-foreground">{t('trace.outboundHint')}</p>
+      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+        {isReq
+          ? <Badge variant="outline" className="font-mono">{entry.method}</Badge>
+          : <Badge variant="outline" className="font-mono">{entry.status ?? '—'}</Badge>}
+        {isReq
+          ? <span className="break-all font-mono text-muted-foreground">{entry.url}</span>
+          : (
             <span className="text-muted-foreground">
-              {t('trace.outboundDuration', {ms: resp.ms ?? 0})}
+              {t('trace.outboundDuration', {ms: entry.ms ?? 0})}
             </span>
-            {resp.error && <span className="text-red-500">{resp.error}</span>}
-          </div>
-          <Headers title={t('trace.outboundRespHeaders')} items={headerPairs(resp.headers)} />
-          <Block title={t('trace.outboundRespBody')} body={resp.body || '—'} />
-        </>
-      )}
-      {(req?.truncated || resp?.truncated) && (
+          )}
+        {!isReq && entry.error && <span className="text-red-500">{entry.error}</span>}
+      </div>
+      <Headers
+        title={isReq ? t('trace.outboundReqHeaders') : t('trace.outboundRespHeaders')}
+        items={headerPairs(entry.headers)}
+      />
+      <Block
+        title={isReq ? t('trace.outboundReqBody') : t('trace.outboundRespBody')}
+        body={entry.body || '—'}
+      />
+      {entry.truncated && (
         <p className="text-[11px] text-amber-600">{t('trace.outboundTruncated')}</p>
       )}
     </div>
