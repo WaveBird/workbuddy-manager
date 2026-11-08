@@ -71,6 +71,21 @@ class PureTest(unittest.TestCase):
         # 仍然可解析：脱敏替换的是值，不是结构
         json.loads(out)
 
+    def test_mask_keeps_credential_prefix_behind_scheme(self) -> None:
+        """`Bearer xxx` 要打到凭证上，而不是只留下 `Bearer`。
+
+        第一版就是错的：取整串前 6 个字符 → `Bearer***`，凭证一位都看不到，
+        而「这是哪一把密钥」正是抓包页要对照的东西。
+        """
+        out = tap.redact_headers([
+            ('authorization', 'Bearer wbk_6eotk5VAabcdefg'),
+            ('x-api-key', 'sk-upstream-abcdef123456'),
+        ])
+        self.assertEqual(out['authorization'], 'Bearer wbk_6e***')
+        self.assertEqual(out['x-api-key'], 'sk-ups***')
+        for value in out.values():
+            self.assertNotIn('abcdefg', value)
+
     def test_redact_headers_masks_secrets(self) -> None:
         out = tap.redact_headers([
             ('authorization', 'Bearer sk-livesecret1234'),
@@ -278,6 +293,8 @@ class DbTest(unittest.TestCase):
     def _capture(self, **kwargs) -> int | None:
         base = dict(
             body=_body(), headers=[('authorization', 'Bearer sk-live1234567890')],
+            upstream_headers={'Content-Type': 'application/json',
+                              'Authorization': 'Bearer sk-upstream-9999'},
             key={'id': 1}, ua='claude-code/1.0', path='/v1/chat/completions',
             protocol='chat', status=200, latency_ms=100, stream=True,
             text=SSE, usage={'prompt_tokens': 11, 'completion_tokens': 7},
@@ -354,6 +371,35 @@ class DbTest(unittest.TestCase):
         req = view['request']
         self.assertEqual(req['body']['model'], 'gpt-4o', '客户端视角必须是原样')
         self.assertEqual(req['upstream_body']['model'], 'cn:gpt-4o', '网关视角必须是改写后')
+
+    def test_capture_keeps_both_header_sets_masked(self) -> None:
+        """客户端请求头与「网关发往上游」的请求头都要留，且都要打码。
+
+        两边的 Authorization 是**不同的凭证**（客户端拿的是本面板密钥，上游那条
+        是上游 api_key）。只留一份时，「凭证换了没换 / 打错账号池」这类问题在
+        界面上完全看不出来 —— 而这正是 401 排查的第一现场。
+        """
+        tap.save_settings({'enabled': True})
+        turn_id = self._capture(
+            headers=[('authorization', 'Bearer wbk_client_abcdef123456'),
+                     ('content-type', 'application/json')],
+            upstream_headers={'Content-Type': 'application/json',
+                              'Authorization': 'Bearer sk-upstream-abcdef123456'},
+        )
+        assert turn_id is not None
+        view = tap.turn_view(turn_id)
+        assert view is not None
+        req = view['request']
+        client_auth = req['headers']['authorization']
+        upstream_auth = req['upstream_headers']['Authorization']
+        self.assertIn('***', client_auth)
+        self.assertIn('***', upstream_auth)
+        # 谁也没被对方覆盖：两套头分别可见、前缀不同
+        self.assertTrue(client_auth.startswith('Bearer'))
+        self.assertTrue(upstream_auth.startswith('Bearer'))
+        self.assertNotIn('abcdef123456', client_auth)
+        self.assertNotIn('abcdef123456', upstream_auth)
+        self.assertEqual(req['upstream_headers']['Content-Type'], 'application/json')
 
     def test_capture_stores_client_response_for_translators(self) -> None:
         """Anthropic / Responses 的「客户端视角」是翻译后的报文，不能等同上游原文。"""

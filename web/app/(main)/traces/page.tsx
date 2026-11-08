@@ -636,6 +636,13 @@ function RequestTab({turn, view}: {turn: TapTurn; view: 'client' | 'gateway'}) {
   const rewrites = view === 'gateway' ? rewriteKeys(clientBody, upstreamBody) : [];
   const shown = view === 'client' ? clientBody : upstreamBody;
 
+  // 请求头也是两份：客户端发来的（含它自己的网关密钥）与网关发给上游的
+  // （含上游密钥）。两边 Authorization 是**不同的凭证**，只看 body 永远看不出
+  // 「凭证换了没换」——而这是排查 401 / 打错账号池的第一现场。
+  const clientHeaders = asHeaders(req ? req.headers : null);
+  const upstreamHeaders = asHeaders(req ? req.upstream_headers : null);
+  const headers = view === 'client' ? clientHeaders : upstreamHeaders;
+
   return (
     <div className="space-y-3">
       {turn.truncated && (
@@ -656,11 +663,58 @@ function RequestTab({turn, view}: {turn: TapTurn; view: 'client' | 'gateway'}) {
           <p className="text-[11px] text-muted-foreground">{t('trace.noRewrite')}</p>
         )
       )}
+      <Headers
+        title={view === 'client' ? t('trace.headers') : t('trace.upstreamHeaders')}
+        items={headers}
+      />
       <Block
         title={view === 'client' ? t('trace.clientRequest') : t('trace.upstreamRequest')}
         body={pretty(shown)}
       />
     </div>
+  );
+}
+
+/** 把入库的 headers 文档转成有序键值对（丢掉大小写重复项，保留原样大小写）。 */
+function asHeaders(value: unknown): [string, string][] {
+  if (!value || typeof value !== 'object') return [];
+  const seen = new Set<string>();
+  const out: [string, string][] = [];
+  Object.entries(value as Record<string, unknown>).forEach(([key, raw]) => {
+    const lower = key.toLowerCase();
+    if (seen.has(lower)) return;
+    seen.add(lower);
+    out.push([key, typeof raw === 'string' ? raw : JSON.stringify(raw)]);
+  });
+  return out.sort((a, b) => a[0].toLowerCase().localeCompare(b[0].toLowerCase()));
+}
+
+/**
+ * 请求头表格。
+ *
+ * 值已由服务端脱敏（Authorization / Cookie / x-api-key 等一律 `前 6 位***`），
+ * 所以这里直接展示，不再二次打码 —— 打两次会把「哪个密钥」也抹掉，反而无法
+ * 对照「换没换凭证」。
+ */
+function Headers({title, items}: {title: string; items: [string, string][]}) {
+  const t = useT();
+  return (
+    <section>
+      <h4 className="mb-1 text-xs font-medium">{title}</h4>
+      {items.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground">{t('trace.noHeaders')}</p>
+      ) : (
+        <dl className="max-h-56 overflow-auto rounded-md bg-muted/40 p-2 text-[11px]">
+          {items.map(([key, value]) => (
+            <div key={key} className="flex gap-2 py-0.5">
+              <dt className="w-40 shrink-0 truncate font-mono text-muted-foreground">{key}</dt>
+              <dd className="min-w-0 flex-1 break-words font-mono">{value || '—'}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <p className="mt-1 text-[10px] text-muted-foreground">{t('trace.headersHint')}</p>
+    </section>
   );
 }
 

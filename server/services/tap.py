@@ -144,10 +144,22 @@ def enabled() -> bool:
 
 # ── 脱敏 ─────────────────────────────────────────────────
 def _mask(value: object) -> str:
+    """打码，**但保留可辨认的前缀**。
+
+    为什么不是一律 `***`：抓包页要看的是「换没换凭证 / 用的是哪一把」。
+    全打码等于把要对照的东西一起抹掉；保留前 6 位，认得出来、又不足以直接用。
+
+    对 `Bearer xxx` / `Basic xxx` 这种带 scheme 的值要**分开处理**：直接取整串的
+    前 6 个字符会得到 `Bearer` —— 因为 scheme 本身占满了，凭证一位都看不到，
+    而这恰恰是最常见的一种头（实测第一版就是这个毛病）。
+    """
     text = '' if value is None else str(value)
     if not text:
         return ''
-    # 保留前 6 个字符：足够让用户认出「是哪个密钥」，又不足以直接用。
+    parts = text.split(' ', 1)
+    if len(parts) == 2 and parts[0].lower() in ('bearer', 'basic', 'token', 'digest'):
+        cred = parts[1]
+        return f'{parts[0]} {cred[:6]}***' if len(cred) > 10 else f'{parts[0]} ***'
     head = text[:6]
     return f'{head}***' if len(text) > 10 else '***'
 
@@ -599,6 +611,7 @@ def capture(*, body: object, headers: Iterable[tuple[str, str]] | None,
             text: str | None = None, payload: object | None = None,
             usage: dict | None = None, error: str | None = None,
             upstream_body: object | None = None,
+            upstream_headers: object | None = None,
             client_response: object | None = None) -> int | None:
     """记录一轮调用。返回 turn id，未抓包时返回 None。
 
@@ -637,6 +650,12 @@ def capture(*, body: object, headers: Iterable[tuple[str, str]] | None,
 
         request_doc = {
             'headers': redact_headers(headers),
+            # 网关发给上游的那套头（Content-Type、Authorization…）。**必须一起留**：
+            # 客户端头里的 Authorization 是它自己的网关密钥，上游头里的是上游密钥，
+            # 两份都对不上时，「凭证到底换了没换」光看 body 永远看不出来。
+            'upstream_headers': redact_headers(
+                upstream_headers.items() if isinstance(upstream_headers, dict)
+                else upstream_headers),
             # `body` 是**客户端原样**发出的体（调用方在改写前快照）；
             # `upstream_body` 是网关改写后的体。相同时只在上面存一份。
             'body': body,
