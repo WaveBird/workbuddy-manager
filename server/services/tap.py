@@ -676,10 +676,15 @@ def _link_parent(first_user: str, protocol: str, key_id: int | None,
         return None
     for row in rows:
         candidate = _norm_text(row['first_user'] or '')
-        # 只比前 120 字：主会话的首条消息可能很长（整段粘贴），而标题请求里的
-        # 文本可能被客户端截断过；前缀是稳定部分。
-        if candidate and candidate[:120] in needle:
-            return int(row['id'])
+        if not candidate:
+            continue
+        # 由长到短试几种前缀：客户端可能把人类消息**截断**后再塞进标题请求
+        # （实测遇到过只保留首句的情况），所以只比整条必然对不上。短到 16 个字
+        # 仍然足够具体（中文 16 字基本不会撞车），再短就不可靠了。
+        for size in (120, 60, 30, 16):
+            sig = candidate[:size]
+            if len(sig) >= 16 and sig in needle:
+                return int(row['id'])
     return None
 
 
