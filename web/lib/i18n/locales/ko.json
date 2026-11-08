@@ -2214,7 +2214,8 @@
       "overview": "개요",
       "request": "요청",
       "response": "응답",
-      "diff": "이전 턴과 비교"
+      "diff": "이전 턴과 비교",
+      "tencent": "텐센트"
     },
     "model": "모델",
     "mappedModel": "매핑된 모델",
@@ -2266,6 +2267,18 @@
     "headers": "요청 헤더(클라이언트)",
     "upstreamHeaders": "요청 헤더(게이트웨이 → 업스트림)",
     "headersHint": "자격 증명은 마스킹됩니다(앞 6자리는 남아 어떤 키인지 구분 가능)",
-    "noHeaders": "헤더가 수집되지 않았습니다(기능 추가 전에 저장된 기록)"
+    "noHeaders": "헤더가 수집되지 않았습니다(기능 추가 전에 저장된 기록)",
+    "outboundHint": "업스트림(workbuddy2api)이 텐센트로 실제 보내는 구간입니다. realm 접두사 제거, 모델명 변경, 프롬프트 재작성, 대화/리스크 헤더가 모두 여기서 일어납니다",
+    "outboundReqHeaders": "텐센트로 보낸 헤더",
+    "outboundReqBody": "텐센트로 보낸 본문",
+    "outboundRespHeaders": "텐센트가 반환한 헤더",
+    "outboundRespBody": "텐센트가 반환한 본문",
+    "outboundDuration": "{ms} ms",
+    "outboundUnavailable": "업스트림에서 출站 추적이 꺼져 있어 이 구간을 볼 수 없습니다. workbuddy2api 의 config.json 에서 outbound_trace.enabled 를 true 로 설정하세요(기본 꺼짐)",
+    "outboundNoTrace": "이 턴에는 연관 키가 없습니다(출站 추적 활성화 이전 기록)",
+    "outboundEmpty": "출站 추적은 켜져 있지만 아직 이 턴의 기록이 없습니다(방금 전송했거나 업스트림 재시작)",
+    "outboundError": "업스트림 덤프를 읽지 못했습니다: {reason}",
+    "outboundPath": "덤프 파일: {path}",
+    "outboundTruncated": "건당 상한을 넘어 잘렸습니다"
   }
 }

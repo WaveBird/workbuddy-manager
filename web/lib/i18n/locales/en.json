@@ -2241,7 +2241,8 @@
       "overview": "Overview",
       "request": "Request",
       "response": "Response",
-      "diff": "Diff with previous"
+      "diff": "Diff with previous",
+      "tencent": "Tencent"
     },
     "model": "Model",
     "mappedModel": "Mapped model",
@@ -2293,6 +2294,18 @@
     "headers": "Headers (client)",
     "upstreamHeaders": "Headers (gateway → upstream)",
     "headersHint": "Credentials are masked, keeping the first 6 characters so you can still tell which key it was",
-    "noHeaders": "No headers captured — this record predates the feature"
+    "noHeaders": "No headers captured — this record predates the feature",
+    "outboundHint": "The hop the upstream (workbuddy2api) really makes to Tencent — realm-prefix stripping, model renaming, prompt rewriting and conversation/risk headers all happen here",
+    "outboundReqHeaders": "Headers sent to Tencent",
+    "outboundReqBody": "Body sent to Tencent",
+    "outboundRespHeaders": "Headers returned by Tencent",
+    "outboundRespBody": "Body returned by Tencent",
+    "outboundDuration": "{ms} ms",
+    "outboundUnavailable": "Outbound tracing is off in the upstream, so this hop is not visible. Set outbound_trace.enabled to true in workbuddy2api config.json (off by default)",
+    "outboundNoTrace": "This turn has no correlation id (recorded before outbound tracing was enabled), so the upstream hop cannot be looked up",
+    "outboundEmpty": "Outbound tracing is on, but this turn is not in the file yet (just sent, or the upstream restarted)",
+    "outboundError": "Could not read the upstream dump: {reason}",
+    "outboundPath": "Dump file: {path}",
+    "outboundTruncated": "Content exceeded the per-record limit and was truncated"
   }
 }

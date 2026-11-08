@@ -1981,7 +1981,8 @@
       "overview": "概览",
       "request": "请求",
       "response": "响应",
-      "diff": "与上一轮对比"
+      "diff": "与上一轮对比",
+      "tencent": "腾讯"
     },
     "model": "模型",
     "mappedModel": "映射模型",
@@ -2033,6 +2034,18 @@
     "headers": "请求头（客户端）",
     "upstreamHeaders": "请求头（网关发往上游）",
     "headersHint": "密钥类字段已打码（保留前 6 位，足以认出是哪一把）",
-    "noHeaders": "未采集到请求头（该记录写入时还没有这一项）"
+    "noHeaders": "未采集到请求头（该记录写入时还没有这一项）",
+    "outboundHint": "上游（workbuddy2api）真正发往腾讯的那一跳 —— 这一段的剥前缀、改模型名、提示词重写、会话头族与风控头都在这里发生",
+    "outboundReqHeaders": "发往腾讯的请求头",
+    "outboundReqBody": "发往腾讯的请求体",
+    "outboundRespHeaders": "腾讯返回的响应头",
+    "outboundRespBody": "腾讯返回的响应体",
+    "outboundDuration": "耗时 {ms} ms",
+    "outboundUnavailable": "上游没有开启出站转储，看不到这一段。请在 workbuddy2api 的 config.json 里把 outbound_trace.enabled 设为 true（默认关闭）",
+    "outboundNoTrace": "这一轮没有关联键（开启出站转储之前的记录），无法回查上游那一跳",
+    "outboundEmpty": "上游已开启转储，但文件里还没有这一轮的记录（可能刚发出，或上游重启过）",
+    "outboundError": "读取上游转储失败：{reason}",
+    "outboundPath": "转储文件：{path}",
+    "outboundTruncated": "内容超过单条上限，已截断"
   }
 }

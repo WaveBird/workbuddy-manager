@@ -2214,7 +2214,8 @@
       "overview": "概要",
       "request": "リクエスト",
       "response": "レスポンス",
-      "diff": "前のターンとの差分"
+      "diff": "前のターンとの差分",
+      "tencent": "テンセント"
     },
     "model": "モデル",
     "mappedModel": "マップ後モデル",
@@ -2266,6 +2267,18 @@
     "headers": "リクエストヘッダー（クライアント）",
     "upstreamHeaders": "リクエストヘッダー（ゲートウェイ→上流）",
     "headersHint": "認証情報は伏字済み（先頭 6 文字は残るため、どのキーかは判別できます）",
-    "noHeaders": "ヘッダーは未取得です（この記録は機能追加前に保存されました）"
+    "noHeaders": "ヘッダーは未取得です（この記録は機能追加前に保存されました）",
+    "outboundHint": "上流（workbuddy2api）がテンセントへ実際に送る区間です。realm プレフィックスの除去、モデル名の書き換え、プロンプトの書き換え、会話ヘッダーとリスクヘッダーはここで行われます",
+    "outboundReqHeaders": "テンセントへ送るヘッダー",
+    "outboundReqBody": "テンセントへ送る本文",
+    "outboundRespHeaders": "テンセントからの応答ヘッダー",
+    "outboundRespBody": "テンセントからの応答本文",
+    "outboundDuration": "{ms} ms",
+    "outboundUnavailable": "上流で出站トレースが無効なため、この区間は表示できません。workbuddy2api の config.json で outbound_trace.enabled を true にしてください（既定は無効）",
+    "outboundNoTrace": "このターンには関連キーがありません（出站トレース有効化前の記録）",
+    "outboundEmpty": "出站トレースは有効ですが、まだこのターンの記録がありません（送信直後、または上流が再起動した可能性）",
+    "outboundError": "上流出站ダンプの読み取りに失敗しました：{reason}",
+    "outboundPath": "ダンプファイル：{path}",
+    "outboundTruncated": "1 件あたりの上限を超えたため切り詰められました"
   }
 }

@@ -60,6 +60,7 @@ import type {
   TapDiff,
   TapSession,
   TapSessionDetail,
+  TapOutbound,
   TapTurn,
   TaskLogResponse,
   TaskRunStatus,
@@ -659,6 +660,8 @@ export const tapApi = {
   session: (id: number) => get<TapSessionDetail>(`/api/tap/sessions/${id}`),
   remove: (id: number) => del<{ok: boolean}>(`/api/tap/sessions/${id}`),
   turn: (id: number) => get<TapTurn>(`/api/tap/turns/${id}`),
+  /** 腾讯视角：上游（workbuddy2api）发往腾讯的那一跳（读它写的 JSONL） */
+  outbound: (id: number) => get<TapOutbound>(`/api/tap/turns/${id}/outbound`),
   diff: (before: number, after: number) =>
     get<TapDiff>('/api/tap/diff', {before, after}),
   clear: () => post<{ok: boolean; turns: number}>('/api/tap/clear'),

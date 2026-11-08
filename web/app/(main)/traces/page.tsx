@@ -29,7 +29,13 @@ import {
   statusTone,
   summaryText,
 } from '@/lib/tap';
-import type {TapDiff, TapSessionDetail, TapTurn, TapTurnBrief} from '@/lib/types';
+import type {
+  TapDiff,
+  TapOutbound,
+  TapSessionDetail,
+  TapTurn,
+  TapTurnBrief,
+} from '@/lib/types';
 import {PageHeader} from '@/components/common/layout/PageHeader';
 import {EmptyState} from '@/components/common/layout/EmptyState';
 import {ConfirmDialog} from '@/components/common/layout/ConfirmDialog';
@@ -53,7 +59,7 @@ import {cn} from '@/lib/utils';
 const PAGE_SIZE = 20;
 
 /** 详情面板的四个页签。差异不是常驻请求：只在切到它时才算。 */
-type Tab = 'overview' | 'request' | 'response' | 'diff';
+type Tab = 'overview' | 'request' | 'response' | 'tencent' | 'diff';
 
 /** 稳定空数组：每次渲染现写 `[]` 会让下游依赖它的 memo 每帧重算（同日志页）。 */
 const EMPTY_TURNS: TapTurnBrief[] = [];
@@ -92,6 +98,7 @@ export default function TracesPage() {
   const [view, setView] = useState<'client' | 'gateway'>('client');
   const [turn, setTurn] = useState<TapTurn | null>(null);
   const [diff, setDiff] = useState<TapDiff | null>(null);
+  const [outbound, setOutbound] = useState<TapOutbound | null>(null);
   const [busy, setBusy] = useState(false);
 
   const [settledQuery] = useDebounced(query, 350, () => setPage(1));
@@ -167,6 +174,25 @@ export default function TracesPage() {
     () => (turn && session ? prevTurn(session.items, turn.seq) : null),
     [turn, session],
   );
+
+  /** 腾讯视角按需取：只有切到该页签才去读上游转储文件。 */
+  useEffect(() => {
+    if (tab !== 'tencent' || !turnId) {
+      setOutbound(null);
+      return;
+    }
+    let alive = true;
+    tapApi.outbound(turnId)
+      .then((data) => {
+        if (alive) setOutbound(data);
+      })
+      .catch((e) => {
+        if (alive) notify.err(errText(e));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [tab, turnId]);
 
   useEffect(() => {
     if (tab !== 'diff' || !turn || !before) {
@@ -490,7 +516,7 @@ export default function TracesPage() {
 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
                   <div className="flex flex-wrap gap-1">
-                    {(['overview', 'request', 'response', 'diff'] as Tab[]).map((key) => (
+                    {(['overview', 'request', 'response', 'tencent', 'diff'] as Tab[]).map((key) => (
                       <button
                         key={key}
                         type="button"
@@ -547,6 +573,7 @@ export default function TracesPage() {
                   {turn && tab === 'overview' && <Overview turn={turn} />}
                   {turn && tab === 'request' && <RequestTab turn={turn} view={view} />}
                   {turn && tab === 'response' && <ResponseTab turn={turn} view={view} />}
+                  {turn && tab === 'tencent' && <TencentTab outbound={outbound} />}
                   {turn && tab === 'diff' && (
                     <DiffTab diff={diff} hasPrev={Boolean(before)} />
                   )}
@@ -1005,4 +1032,85 @@ function Timeline({
       </div>
     </div>
   );
+}
+
+/**
+ * 腾讯视角：上游（workbuddy2api）真正发往腾讯的那一跳。
+ *
+ * 数据不经过本服务：workbuddy2api 开了 `outbound_trace` 之后会把它出站的两行
+ * （请求 / 响应）写进本地 JSONL，本页只是按 trace id 去那份文件里取。所以「看不到」
+ * 有三种完全不同的原因，必须分开说清楚 —— 否则用户只能对着空白猜：
+ *   1. 上游没开转储（文件不存在）；
+ *   2. 开了但这一轮没有关联键（功能上线前的老记录）；
+ *   3. 文件在、id 也在，但还没写进这一轮（刚发出 / 上游重启过）。
+ */
+function TencentTab({outbound}: {outbound: TapOutbound | null}) {
+  const t = useT();
+  if (!outbound) return <SkeletonBar className="h-32 w-full" />;
+
+  if (!outbound.available) {
+    const hint = outbound.reason === 'no-trace'
+      ? t('trace.outboundNoTrace')
+      : outbound.reason === 'no-file'
+        ? t('trace.outboundUnavailable')
+        : t('trace.outboundError', {reason: outbound.reason});
+    return (
+      <div className="space-y-2 text-xs">
+        <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-amber-700 dark:text-amber-300">
+          {hint}
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          {t('trace.outboundPath', {path: outbound.path})}
+        </p>
+      </div>
+    );
+  }
+
+  const req = outbound.entries.find((e) => e.kind === 'request');
+  const resp = outbound.entries.find((e) => e.kind === 'response');
+  if (!req && !resp) {
+    return <p className="text-xs text-muted-foreground">{t('trace.outboundEmpty')}</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] text-muted-foreground">
+        {t('trace.outboundHint')}
+      </p>
+      {req && (
+        <>
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <Badge variant="outline" className="font-mono">{req.method}</Badge>
+            <span className="break-all font-mono text-muted-foreground">{req.url}</span>
+          </div>
+          <Headers title={t('trace.outboundReqHeaders')} items={headerPairs(req.headers)} />
+          <Block title={t('trace.outboundReqBody')} body={req.body || '—'} />
+        </>
+      )}
+      {resp && (
+        <>
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <Badge variant="outline" className="font-mono">{resp.status ?? '—'}</Badge>
+            <span className="text-muted-foreground">
+              {t('trace.outboundDuration', {ms: resp.ms ?? 0})}
+            </span>
+            {resp.error && <span className="text-red-500">{resp.error}</span>}
+          </div>
+          <Headers title={t('trace.outboundRespHeaders')} items={headerPairs(resp.headers)} />
+          <Block title={t('trace.outboundRespBody')} body={resp.body || '—'} />
+        </>
+      )}
+      {(req?.truncated || resp?.truncated) && (
+        <p className="text-[11px] text-amber-600">{t('trace.outboundTruncated')}</p>
+      )}
+    </div>
+  );
+}
+
+/** 上游转储里的 headers 已是打码后的平铺对象，这里只排序展示。 */
+function headerPairs(headers: Record<string, string> | undefined): [string, string][] {
+  if (!headers) return [];
+  return Object.entries(headers)
+    .map(([k, v]) => [k, String(v)] as [string, string])
+    .sort((a, b) => a[0].toLowerCase().localeCompare(b[0].toLowerCase()));
 }

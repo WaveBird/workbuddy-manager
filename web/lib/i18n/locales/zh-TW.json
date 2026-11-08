@@ -2214,7 +2214,8 @@
       "overview": "概覽",
       "request": "請求",
       "response": "回應",
-      "diff": "與上一輪對比"
+      "diff": "與上一輪對比",
+      "tencent": "騰訊"
     },
     "model": "模型",
     "mappedModel": "映射模型",
@@ -2266,6 +2267,18 @@
     "headers": "請求標頭（用戶端）",
     "upstreamHeaders": "請求標頭（閘道發往上遊）",
     "headersHint": "金鑰類欄位已遮罩（保留前 6 位，足以認出是哪一把）",
-    "noHeaders": "未擷取到請求標頭（該記錄寫入時還沒有這一項）"
+    "noHeaders": "未擷取到請求標頭（該記錄寫入時還沒有這一項）",
+    "outboundHint": "上遊（workbuddy2api）真正發往騰訊的那一跳 —— 這一跳的剝前綴、改模型名、提示詞重寫、會話頭族與風控頭都在這裡發生",
+    "outboundReqHeaders": "發往騰訊的請求標頭",
+    "outboundReqBody": "發往騰訊的請求內容",
+    "outboundRespHeaders": "騰訊回傳的回應標頭",
+    "outboundRespBody": "騰訊回傳的回應內容",
+    "outboundDuration": "耗時 {ms} ms",
+    "outboundUnavailable": "上遊沒有開啟出站轉儲，看不到這一段。請在 workbuddy2api 的 config.json 裡把 outbound_trace.enabled 設為 true（預設關閉）",
+    "outboundNoTrace": "這一輪沒有關聯鍵（開啟出站轉儲之前的記錄），無法回查上遊那一跳",
+    "outboundEmpty": "上遊已開啟轉儲，但檔案裡還沒有這一輪的記錄（可能剛送出，或上遊重啟過）",
+    "outboundError": "讀取上遊轉儲失敗：{reason}",
+    "outboundPath": "轉儲檔案：{path}",
+    "outboundTruncated": "內容超過單條上限，已截斷"
   }
 }

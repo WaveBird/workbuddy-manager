@@ -2008,6 +2008,34 @@ export interface TapTurn extends Omit<TapTurnBrief, 'request_bytes' | 'response_
   client_recon: TapRecon | null;
   passthrough: boolean;
   client_protocol: string;
+  /** 关联键：上游出站转储按它回查（腾讯视角）。NULL = 老记录 / 上游没开转储。 */
+  trace_id?: string | null;
+}
+
+/* ── 腾讯视角：上游（workbuddy2api）真正发往腾讯的那一跳 ─────────────── */
+
+export interface TapOutboundEntry {
+  kind: 'request' | 'response';
+  trace_id: string;
+  uid?: string;
+  ts?: number;
+  ms?: number;
+  method?: string;
+  url?: string;
+  status?: number;
+  headers?: Record<string, string>;
+  body?: string;
+  truncated?: boolean;
+  error?: string;
+}
+
+export interface TapOutbound {
+  available: boolean;
+  /** no-trace（老记录）/ no-file（上游没开或还没写）/ io:… */
+  reason: string;
+  entries: TapOutboundEntry[];
+  path: string;
+  trace_id?: string | null;
 }
 
 /** 两轮请求的结构化差异（claude-tap 的 diff 视图）。 */

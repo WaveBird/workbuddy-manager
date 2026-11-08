@@ -96,6 +96,23 @@ def get_turn(turn_id: int, user: dict = Depends(security.require_admin)) -> dict
     return data
 
 
+@router.get('/turns/{turn_id}/outbound')
+def get_outbound(turn_id: int,
+                 user: dict = Depends(security.require_admin)) -> dict:
+    """腾讯视角：上游（workbuddy2api）真正发往腾讯的那一跳。
+
+    数据来自**上游进程自己写的** JSONL（`outbound_trace`，默认关闭），本接口只按
+    trace id 去文件里取那两行。因此三种「看不到」要分开讲清楚，别让用户对着空白
+    猜：上游没开转储 / 文件还没生成 / 这一轮没有 id（功能上线前的老记录）。
+    """
+    data = tap.turn(turn_id)
+    if not data:
+        raise HTTPException(status_code=404, detail='该轮记录不存在（可能已按保留策略清理）')
+    result = tap.outbound(data.get('trace_id'))
+    result['trace_id'] = data.get('trace_id')
+    return result
+
+
 @router.get('/diff')
 def get_diff(before: int, after: int,
              user: dict = Depends(security.require_admin)) -> dict:

@@ -34,8 +34,10 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import os
 import re
 import time
+from pathlib import Path
 from typing import Any, Iterable
 
 from .. import config, db
@@ -651,6 +653,7 @@ def capture(*, body: object, headers: Iterable[tuple[str, str]] | None,
             usage: dict | None = None, error: str | None = None,
             upstream_body: object | None = None,
             upstream_headers: object | None = None,
+            trace_id: str | None = None,
             client_response: object | None = None) -> int | None:
     """记录一轮调用。返回 turn id，未抓包时返回 None。
 
@@ -741,13 +744,14 @@ def capture(*, body: object, headers: Iterable[tuple[str, str]] | None,
             'mapped_model, status, stream, latency_ms, first_token_ms, '
             'prompt_tokens, completion_tokens, cache_hit_tokens, cache_miss_tokens, '
             'cost, request_json, response_text, client_response_text, recon_json, '
-            'usage_json, error, truncated) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'usage_json, error, truncated, trace_id) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (session_id, seq, now, _clean(path, 128), protocol, _clean(model, 128),
              _clean(model, 128), status, 1 if stream else 0, latency_ms,
              first_token_ms, pt, ct, _as_int(hit), _as_int(miss), cost,
              request_text, response_text, client_text or None, recon_text,
              json.dumps(usage_obj, ensure_ascii=False, default=str)[:8192],
-             _clean(error, 500), 1 if (cut_request or cut_response or cut_recon) else 0),
+             _clean(error, 500), 1 if (cut_request or cut_response or cut_recon) else 0,
+             _clean(trace_id, 64)),
         )
         db.execute(
             'UPDATE tap_sessions SET updated_at = ?, turns = ?, '
@@ -1010,6 +1014,7 @@ def turn(turn_id: int) -> dict | None:
         'response_raw': row['response_text'] if (not response_ok or row['stream']) else None,
         'recon': recon or {'text': '', 'reasoning': '', 'tool_calls': []},
         'usage': usage or {},
+        'trace_id': row['trace_id'] if 'trace_id' in row.keys() else None,
         # ── 两端视角 ──────────────────────────────────────────
         # `upstream_*` 是网关与上游之间那一跳，`client_*` 是客户端手里那份。
         # 对 Chat 两者相同（透传），对 Anthropic / Responses 是两份不同报文。
@@ -1056,6 +1061,65 @@ def turn_view(turn_id: int) -> dict | None:
         body = data['request'].get('upstream_body') or data['request'].get('body')
     data['summary'] = _summary(body)
     return data
+
+
+# ── 上游出站转储（腾讯视角）─────────────────────────────
+# workbuddy2api 开启 outbound_trace 后，会把「它真正发往腾讯」的请求 / 响应写成
+# JSONL。该文件就落在面板已挂载的上游目录里，所以直接读，不新增接口、不复制数据。
+def _outbound_path() -> Path:
+    return Path(os.environ.get('WB_TAP_OUTBOUND_FILE',
+                               '/opt/workbuddy2api/data/outbound-trace.jsonl'))
+
+
+def outbound(trace_id: str | None, *, max_scan: int = 4 * 1024 * 1024) -> dict:
+    """按 trace_id 取上游出站记录（腾讯视角）。
+
+    **从文件尾部倒着扫**而不是整份读入：这个文件随调用线性增长（一天几万行很
+    正常），而查的永远是最近那一轮。倒扫 4 MB 覆盖「刚打完就看」的场景，也把
+    「一次查看拖垮内存」这条路堵死。
+    """
+    path = _outbound_path()
+    if not trace_id:
+        return {'available': False, 'reason': 'no-trace', 'entries': [], 'path': str(path)}
+    if not path.is_file():
+        return {'available': False, 'reason': 'no-file', 'entries': [], 'path': str(path)}
+
+    wanted = trace_id.strip()
+    marker = f'"{wanted}"'.encode()
+    found: list[dict] = []
+    try:
+        with path.open('rb') as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            read = 0
+            carry = b''
+            while read < min(size, max_scan):
+                step = min(65536, size - read)
+                if step <= 0:
+                    break
+                read += step
+                fh.seek(size - read)
+                chunk = fh.read(step) + carry
+                lines = chunk.split(b'\n')
+                # 第一行可能被截断（除非已经读到文件开头），留给下一轮拼接。
+                carry = b'' if read >= size else lines[0]
+                for raw in reversed(lines[1:] if read < size else lines):
+                    if wanted.encode() not in raw or marker not in raw:
+                        continue
+                    try:
+                        entry = json.loads(raw)
+                    except ValueError:
+                        continue
+                    if entry.get('trace_id') != wanted:
+                        continue
+                    found.append(entry)
+                if len(found) >= 2:
+                    break
+    except OSError as exc:
+        return {'available': False, 'reason': f'io: {exc}', 'entries': [], 'path': str(path)}
+
+    found.sort(key=lambda e: (e.get('kind') != 'request', e.get('ts', 0)))
+    return {'available': True, 'reason': '', 'entries': found, 'path': str(path)}
 
 
 def delete_session(session_id: int) -> bool:
