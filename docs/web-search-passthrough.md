@@ -35,12 +35,21 @@ Content-Type: application/json
 
 {
   "query": "搜索词（必填）",
+  "type": "text2text",                    // 可选，固定值；上游 agenttool 请求类型
   "max_results": 5,                       // 可选，默认 5，1..20
-  "allowed_domains": ["go.dev"],          // 可选
-  "blocked_domains": ["reddit.com"],      // 可选，manager 层拼成 " -site:x" 进 query
-  "freshness": "d1"                       // 可选：d1 | m1 | y1
+  "allowed_domains": ["go.dev"],          // 可选，字符串数组；只返回这些域
+  "blocked_domains": ["reddit.com"],      // 可选，字符串数组；网关拼成 " -site:x" 进 query
+  "freshness": "d1"                       // 可选：d1 | m1 | y1（一天 / 一月 / 一年内）
 }
 ```
+
+> manager 对请求体的处理是**校验 + 原样转发**：`query` 非空、`type` 只能为
+> `text2text`、`max_results` 为 1..20 整数、两个域名参数为字符串数组、
+> `freshness` 属于 `d1|m1|y1`（空串等同不传）。非法参数在 manager 返回
+> `400 invalid_search_params`，不消耗账号池搜索配额；合法 body 逐字段原样
+> 转发（不重命名、不删字段），未知字段也放行以兼容后续 agenttool 扩展。
+> `max_results` 的默认/兜底与 `blocked_domains` 的 `-site:` 拼接都在 0057
+> 网关完成，manager 不改写 body（见调用日志与轨迹抓包：入站/出站同体）。
 
 ### 响应（上游信封原样透传，不翻译）
 
@@ -59,7 +68,7 @@ Content-Type: application/json
 
 | HTTP | 场景 | body 形态 |
 |---|---|---|
-| 400 | query 为空 / body 非 JSON / freshness 非法 | OpenAI error 信封 |
+| 400 | query 为空 / 非字符串 / body 非 JSON / 任一可选参数非法（type、max_results、allowed_domains、blocked_domains、freshness）→ `invalid_search_params` | OpenAI error 信封 |
 | 401/403/429 | 密钥无效 / IP 拦截 / 频控（与 chat 同管线） | OpenAI error 信封 |
 | 429 | **全池搜索配额耗尽**（上游 15001） | `{"error":"...quota...","code":"quota_web_search","tried":N}` |
 | 200 + code≠0 | 上游其他业务码 | 上游信封原样（`code`/`msg` 字段，客户端自行路由） |
@@ -138,5 +147,7 @@ cd ~/.dsh/profiles/web && pnpm add dsh-web-search-workbuddy
 
 ```bash
 python3 -m pytest server/tests/test_gateway_tools_search.py -q
-# 8 例：鉴权 / 空 query / 坏 body / 成功透传 / 429 配额 / 200 业务码 / 502 / 503
+# 12 例 + 8 subtests：鉴权 / 空 query / 坏 body / 成功透传 / 429 配额 /
+# 200 业务码 / 502 / 503 / agenttool 全参数原样转发 / 非法参数早失败 /
+# freshness 空串 / 未知字段放行
 ```
