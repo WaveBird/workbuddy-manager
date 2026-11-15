@@ -50,6 +50,11 @@ Content-Type: application/json
 > 转发（不重命名、不删字段），未知字段也放行以兼容后续 agenttool 扩展。
 > `max_results` 的默认/兜底与 `blocked_domains` 的 `-site:` 拼接都在 0057
 > 网关完成，manager 不改写 body（见调用日志与轨迹抓包：入站/出站同体）。
+>
+> 这道入站校验是**可选纵深护栏**：配套插件 `dsh-web-search-workbuddy` 已
+> 在客户端侧完成参数构造与主校验（枚举、1..20 钳制、域名归一化、非法值
+> 不发请求），路由从首版起就是 `json=body` 全量透传，单一可信插件链路
+> 原本已足够；manager 侧校验主要面向绕过插件直连本端点的调用方。
 
 ### 响应（上游信封原样透传，不翻译）
 
