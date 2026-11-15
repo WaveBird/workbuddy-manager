@@ -114,16 +114,20 @@ cd workbuddy2api && git apply dev/upstream-patches/0057-web-search-tool.patch
 
 DSH 的 `dsh-web-search-workbuddy` 插件（npm：[`dsh-web-search-workbuddy`](https://www.npmjs.com/package/dsh-web-search-workbuddy)、
 GitHub：[WaveBird/dsh-web-search-workbuddy](https://github.com/WaveBird/dsh-web-search-workbuddy)）
-把这个端点注册成 DSH web seam 的 search provider：
+把这个端点注册成 DSH web seam 的 search provider。插件 0.4.1 起支持
+`modelControlled: true`：模型可以在一次 `web_search` 调用里自主选择
+`allowedDomains` / `blockedDomains` / `freshness` / `maxResults`，插件把这些
+字段透传进 `ctx.web.search()` 的请求对象，经 seam 原样到达本路由。
 
 ```yaml
-# ~/.dsh/profiles/web/cordis.patch.yml —— 零配置：
+# ~/.dsh/profiles/web/cordis.patch.yml —— 零配置 + 模型可控过滤
 # baseURL 与 apiKeyEnv 自动从会话当前模型 provider 路由派生
-# （读 llm-pi-ai 路由 profile，与模型共用同一把 wbk_ 密钥；
-# 模型换路由时搜索自动跟随。插件 0.3.0+）
+# （读 llm-pi-ai 路由 profile，与模型共用同一把 wbk_ 密钥）。
 - insert:
     - id: web-search-workbuddy
       name: 'dsh-web-search-workbuddy'
+      config:
+        modelControlled: true
 - id: web
   name: '@deepseek-ai/dsh-web'
   config:
@@ -131,17 +135,48 @@ GitHub：[WaveBird/dsh-web-search-workbuddy](https://github.com/WaveBird/dsh-web
     searchProvider: workbuddy-gateway         # 插件注册的 provider id
 - id: tool-web
   name: '@deepseek-ai/dsh-tool-web'
-  config: { fetch: true, search: true, searchTimeoutMs: 60000 }
+  # 每个 agent preset 里的 tool-web 也要同步改 search: false
+  config: { fetch: true, search: false, searchTimeoutMs: 60000 }
 ```
+
+`modelControlled: false`（默认）时使用官方 `web_search` 工具，上述四项为
+部署级默认值：`config: { fetch: true, search: true, searchTimeoutMs: 60000 }`。
 
 安装：
 
 ```bash
-cd ~/.dsh/profiles/web && pnpm add dsh-web-search-workbuddy
-# 重启 dsh web 后，新会话的模型工具目录里出现 web_search
+cd ~/.dsh/profiles/web && pnpm add dsh-web-search-workbuddy@^0.4.1
+# 重启 dsh web 后，新会话的模型工具目录里出现带过滤参数的 web_search
 ```
 
 任意 OpenAI 兼容客户端也可以直接 HTTP 调（见上文协议节）。
+
+### 实测效果
+
+模型在会话中自主传入全部过滤参数：
+
+```json
+{
+  "queries": ["Go generics official tutorial"],
+  "allowedDomains": ["go.dev"],
+  "blockedDomains": ["reddit.com"],
+  "freshness": "y1",
+  "maxResults": 3
+}
+```
+
+manager 收到的 wire body（轨迹抓包）为：
+
+```json
+{"query":"Go generics official tutorial","type":"text2text","max_results":3,
+ "allowed_domains":["go.dev"],"blocked_domains":["reddit.com"],"freshness":"y1"}
+```
+
+返回 3 条全部来自 `go.dev`，manager `200`、0057 网关 `search ok results=3`。
+
+![对话中的 web_search 调用卡片与 3 条 go.dev 结果](images/web-search-full-params-conversation.jpg)
+
+![工具详情：参数、结果、Schema 与计时](images/web-search-full-params-tool-detail.jpg)
 
 ## 测试
 
